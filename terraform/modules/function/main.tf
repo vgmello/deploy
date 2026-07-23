@@ -12,7 +12,7 @@ locals {
 
   image = try(var.function.image, null) != null ? var.function.image : var.image_tag
 
-  image_has_registry = local.image != null && length(split("/", local.image)) > 1
+  image_has_registry = local.image != null ? length(split("/", local.image)) > 1 : false
   image_registry     = local.image_has_registry ? split("/", local.image)[0] : "docker.io"
   image_repo_tag     = local.image_has_registry ? join("/", slice(split("/", local.image), 1, length(split("/", local.image)))) : local.image
   image_repo         = local.image != null ? split(":", local.image_repo_tag)[0] : null
