@@ -38,3 +38,8 @@ validate() {
   run validate invalid-unknown-key.yml
   [ "$status" -ne 0 ]
 }
+
+@test "empty environments map is invalid" {
+  run validate invalid-empty-environments.yml
+  [ "$status" -ne 0 ]
+}

@@ -13,6 +13,7 @@
     "storage": { "$ref": "#/$defs/storage" },
     "environments": {
       "type": "object",
+      "minProperties": 1,
       "propertyNames": { "pattern": "^[a-z][a-z0-9]{1,15}$" },
       "additionalProperties": { "$ref": "#/$defs/overlay" }
     }

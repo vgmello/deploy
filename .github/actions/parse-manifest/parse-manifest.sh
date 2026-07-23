@@ -12,6 +12,7 @@ SCHEMA="$REPO_ROOT/terraform/schema/cloud-tool.schema.json"
 DEFAULTS="$ACTION_DIR/defaults"
 
 mkdir -p "$OUT"
+rm -f "$OUT"/tool.*.json "$OUT"/outputs.txt
 
 yq -o=json '.' "$MANIFEST" > "$OUT/manifest.json"
 npx --yes ajv-cli@5 validate --spec=draft2020 -s "$SCHEMA" -d "$OUT/manifest.json"
@@ -44,9 +45,12 @@ for env in $(echo "$ENVS" | yq -p=json '.[]'); do
   yq -o=json '.' "$OUT/merged.$env.yml" > "$OUT/tool.$env.json"
 done
 
-{
-  echo "name=$NAME"
-  echo "type=$TYPE"
-  echo "environments=$ENVS"
-  echo "docker=$DOCKER"
-} >> "${GITHUB_OUTPUT:-$OUT/outputs.txt}"
+OUTPUTS="name=$NAME
+type=$TYPE
+environments=$ENVS
+docker=$DOCKER"
+
+echo "$OUTPUTS" > "$OUT/outputs.txt"
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "$OUTPUTS" >> "$GITHUB_OUTPUT"
+fi

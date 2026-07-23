@@ -6,7 +6,7 @@ setup() {
   RESOLVE="$REPO_ROOT/.github/actions/resolve-config/resolve-config.sh"
   FIXTURES="$REPO_ROOT/tests/fixtures/manifests"
   GOLDEN="$REPO_ROOT/tests/golden"
-  ENVDIR="$REPO_ROOT/environments"
+  ENVDIR="$REPO_ROOT/tests/fixtures/environments"
   TMP="$(mktemp -d)"
 }
 
