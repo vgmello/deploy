@@ -6,6 +6,7 @@ variables {
   image_tags = {
     "api/main"    = "acrplatformdev.azurecr.io/orders-api-api:abc123"
     "worker/main" = "acrplatformdev.azurecr.io/orders-api-worker:abc123"
+    "processor"   = "acrplatformdev.azurecr.io/orders-api-processor:abc123"
   }
 }
 

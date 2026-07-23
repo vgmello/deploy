@@ -93,8 +93,8 @@ resource "azurerm_linux_function_app" "this" {
 
   lifecycle {
     precondition {
-      condition     = try(var.function.docker, null) == null || local.image != null
-      error_message = "function declares docker: but no image reference was supplied via image_tags"
+      condition     = local.image != null
+      error_message = "function has no image: no image reference in the manifest and none supplied via image_tags"
     }
   }
 }
