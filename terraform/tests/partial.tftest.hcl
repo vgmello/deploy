@@ -43,3 +43,20 @@ run "compute" {
     error_message = "static site must use the deduped name"
   }
 }
+
+run "function_docker_parsing" {
+  command = plan
+
+  assert {
+    condition     = module.function["relay"].docker_image.registry_url == "https://myacr.azurecr.io"
+    error_message = "registry with a dot must be parsed as registry_url"
+  }
+  assert {
+    condition     = module.function["relay"].docker_image.image_name == "relay"
+    error_message = "image repo must strip registry"
+  }
+  assert {
+    condition     = module.function["relay"].docker_image.image_tag == "2.0"
+    error_message = "image tag must be parsed"
+  }
+}

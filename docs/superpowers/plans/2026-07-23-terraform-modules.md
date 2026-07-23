@@ -81,3 +81,11 @@ Function: per-entry storage account + EP1 Linux plan, linux_function_app with VN
 ## Execution note
 
 Executed inline (single session) at the user's direction ("everything should be done") — plan authored with complete code held by the executor; per-task verification loops (`validate` + `test`) replace per-task subagent reviews; a final whole-branch review subagent gates the merge.
+
+## Plan 3 handoff notes (from final review)
+
+- **First-deploy ordering:** spec orders sync-secrets before terraform-deploy, but on a tool's first deploy the Key Vault doesn't exist yet and the container app's KV secret refs are validated at create. Plan 3 must handle this (sync-secrets tolerates missing vault + re-run after apply, or two-phase first apply).
+- **KV firewall + CAE:** Container Apps is not a trusted Azure service for Key Vault; secret refs resolve only if the CAE VNet resolves the vault via the privatelink DNS zone. Platform-infra prerequisite — document in platform config contract.
+- **Backend config:** workflow must pass `-backend-config` derived from `platform.terraform_state` plus state key `<name>/<env>.tfstate` and `use_oidc=true`.
+- **Role-assignment propagation:** dependency edge exists (container app waits on role assignments), but Azure RBAC propagation can still lag; workflow retry on first apply may be needed.
+- Deferred minors: postgres `zone = "1"` hardcoded (fails zoneless regions); SWA limited-region location (platform override option); runner-IP `ip_rules` churn between applies; secrets present in TF state (lock down state storage account).

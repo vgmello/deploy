@@ -56,7 +56,7 @@ module "container_app" {
   resource_group_name           = azurerm_resource_group.this.name
   container_apps_environment_id = local.platform.container_apps_environment_id
   app                           = each.value
-  image_tags                    = { for k, v in var.image_tags : split("/", k)[1] => v if split("/", k)[0] == each.key }
+  image_tags                    = { for k, v in var.image_tags : split("/", k)[1] => v if length(split("/", k)) == 2 && split("/", k)[0] == each.key }
   acr_login_server              = local.platform.acr.login_server
   acr_id                        = local.acr_id
   keyvault_id                   = module.keyvault.id

@@ -9,3 +9,12 @@ output "default_hostname" {
 output "plan_sku" {
   value = azurerm_service_plan.this.sku_name
 }
+
+output "docker_image" {
+  description = "Parsed docker stack settings, null when the function has no image"
+  value = local.image == null ? null : {
+    registry_url = "https://${local.image_registry}"
+    image_name   = local.image_repo
+    image_tag    = local.image_tag_part
+  }
+}

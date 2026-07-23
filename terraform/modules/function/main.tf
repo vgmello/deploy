@@ -12,8 +12,9 @@ locals {
 
   image = try(var.function.image, null) != null ? var.function.image : var.image_tag
 
-  image_has_registry = local.image != null ? length(split("/", local.image)) > 1 : false
-  image_registry     = local.image_has_registry ? split("/", local.image)[0] : "docker.io"
+  image_first_part   = local.image != null ? split("/", local.image)[0] : ""
+  image_has_registry = local.image != null ? (length(split("/", local.image)) > 1 ? (strcontains(local.image_first_part, ".") || strcontains(local.image_first_part, ":") || local.image_first_part == "localhost") : false) : false
+  image_registry     = local.image_has_registry ? local.image_first_part : "docker.io"
   image_repo_tag     = local.image_has_registry ? join("/", slice(split("/", local.image), 1, length(split("/", local.image)))) : local.image
   image_repo         = local.image != null ? split(":", local.image_repo_tag)[0] : null
   image_tag_part     = local.image != null ? (length(split(":", local.image_repo_tag)) > 1 ? split(":", local.image_repo_tag)[1] : "latest") : null
@@ -73,6 +74,9 @@ resource "azurerm_linux_function_app" "this" {
   }
 
   site_config {
+    container_registry_use_managed_identity       = local.image != null
+    container_registry_managed_identity_client_id = local.image != null ? azurerm_user_assigned_identity.this.client_id : null
+
     dynamic "application_stack" {
       for_each = local.image != null ? [1] : []
       content {
@@ -86,4 +90,11 @@ resource "azurerm_linux_function_app" "this" {
   }
 
   app_settings = merge(try(var.function.env, {}), local.kv_ref_settings)
+
+  lifecycle {
+    precondition {
+      condition     = try(var.function.docker, null) == null || local.image != null
+      error_message = "function declares docker: but no image reference was supplied via image_tags"
+    }
+  }
 }
