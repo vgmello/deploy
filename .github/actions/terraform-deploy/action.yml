@@ -31,75 +31,28 @@ inputs:
 outputs:
   summary:
     description: One-line plan/apply summary
-    value: ${{ steps.apply.outputs.summary }}
+    value: ${{ steps.deploy.outputs.summary }}
 runs:
   using: composite
   steps:
-    - id: prepare
-      shell: bash
-      env:
-        TAGS_INPUT: ${{ inputs.image-tags }}
-      run: |
-        set -euo pipefail
-        "${{ github.action_path }}/render-backend-config.sh" \
-          "${{ inputs.platform-file }}" "${{ inputs.tool-name }}" "${{ inputs.environment }}" \
-          > backend.conf
-
-        TAGS="$TAGS_INPUT"
-        if [ "${{ inputs.plan-only }}" = "true" ] && [ "$(echo "$TAGS" | jq 'length')" -eq 0 ]; then
-          REGISTRY="$(yq '.acr.login_server' "${{ inputs.platform-file }}")"
-          TAGS="$("${{ github.action_path }}/../docker-build/enumerate-builds.sh" \
-            "${{ inputs.tool-json }}" "${{ inputs.tool-name }}" "$REGISTRY" plan-placeholder | jq -c .tags)"
-        fi
-        echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
-
-        if [ "$(yq '.runner_access' "${{ inputs.platform-file }}")" = "public-allowlist" ]; then
-          echo "runner_ip=$(curl -fsS --retry 3 --retry-delay 5 https://api.ipify.org)" >> "$GITHUB_OUTPUT"
-        else
-          echo "runner_ip=" >> "$GITHUB_OUTPUT"
-        fi
-
     - shell: bash
-      run: |
-        terraform -chdir="${{ inputs.terraform-dir }}" init -input=false \
-          $(sed 's/^/-backend-config=/' backend.conf | tr '\n' ' ')
+      run: pip install -q -r "${{ github.action_path }}/../../../requirements.txt"
 
-    - id: apply
+    - id: deploy
       shell: bash
       env:
         TF_IN_AUTOMATION: "true"
-        IMAGE_TAGS: ${{ steps.prepare.outputs.tags }}
-        RUNNER_IP: ${{ steps.prepare.outputs.runner_ip }}
+        IMAGE_TAGS: ${{ inputs.image-tags }}
         TARGETS: ${{ inputs.targets }}
-      run: |
-        set -euo pipefail
-        TFVARS="$(cd "$(dirname "${{ inputs.tfvars-file }}")" && pwd)/$(basename "${{ inputs.tfvars-file }}")"
-        ARGS=(-input=false -var-file="$TFVARS" -var "image_tags=$IMAGE_TAGS")
-        if [ -n "$RUNNER_IP" ]; then
-          ARGS+=(-var "runner_ip=$RUNNER_IP")
-        fi
-        for t in $TARGETS; do ARGS+=(-target="$t"); done
-
-        terraform -chdir="${{ inputs.terraform-dir }}" plan "${ARGS[@]}" -out=tfplan | tail -20
-        terraform -chdir="${{ inputs.terraform-dir }}" show -no-color tfplan > plan.txt
-        {
-          echo "<details><summary>terraform plan (${{ inputs.environment }})</summary>"
-          echo
-          echo '```'
-          head -200 plan.txt
-          echo '```'
-          echo "</details>"
-        } >> "$GITHUB_STEP_SUMMARY"
-
-        if [ "${{ inputs.plan-only }}" = "true" ]; then
-          echo "summary=plan only (${{ inputs.environment }})" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        if ! terraform -chdir="${{ inputs.terraform-dir }}" apply -input=false tfplan; then
-          echo "::warning::apply failed; retrying once in 30s (RBAC propagation)"
-          sleep 30
-          terraform -chdir="${{ inputs.terraform-dir }}" plan "${ARGS[@]}" -out=tfplan > /dev/null
-          terraform -chdir="${{ inputs.terraform-dir }}" apply -input=false tfplan
-        fi
-        echo "summary=applied ${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+      run: >-
+        PYTHONPATH="${{ github.action_path }}/../../.."
+        python3 -m cloudtool terraform-deploy
+        --terraform-dir "${{ inputs.terraform-dir }}"
+        --tfvars-file "${{ inputs.tfvars-file }}"
+        --tool-json "${{ inputs.tool-json }}"
+        --tool-name "${{ inputs.tool-name }}"
+        --environment "${{ inputs.environment }}"
+        --platform-file "${{ inputs.platform-file }}"
+        --image-tags "$IMAGE_TAGS"
+        --targets "$TARGETS"
+        ${{ inputs.plan-only == 'true' && '--plan-only' || '' }}

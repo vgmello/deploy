@@ -16,39 +16,19 @@ inputs:
 outputs:
   image-tags:
     description: JSON map <key> -> full image reference
-    value: ${{ steps.enumerate.outputs.tags }}
+    value: ${{ steps.build.outputs.image-tags }}
 runs:
   using: composite
   steps:
-    - id: enumerate
+    - shell: bash
+      run: pip install -q -r "${{ github.action_path }}/../../../requirements.txt"
+
+    - id: build
       shell: bash
-      run: |
-        PLAN="$("${{ github.action_path }}/enumerate-builds.sh" \
-          "${{ inputs.tool-json }}" "${{ inputs.tool-name }}" \
-          "${{ inputs.registry }}" "${{ inputs.git-sha }}")"
-        echo "plan=$(echo "$PLAN" | jq -c .)" >> "$GITHUB_OUTPUT"
-        echo "tags=$(echo "$PLAN" | jq -c .tags)" >> "$GITHUB_OUTPUT"
-
-    - shell: bash
-      run: az acr login --name "$(echo "${{ inputs.registry }}" | cut -d. -f1)"
-
-    - shell: bash
-      env:
-        PLAN: ${{ steps.enumerate.outputs.plan }}
-        TAGS: ${{ steps.enumerate.outputs.tags }}
-      run: |
-        set -euo pipefail
-        while read -r build; do
-          file=$(echo "$build" | jq -r .file)
-          context=$(echo "$build" | jq -r .context)
-          first_key=$(echo "$build" | jq -r '.keys[0]')
-          first_ref=$(echo "$TAGS" | jq -r --arg k "$first_key" '.[$k]')
-          docker build -f "$file" -t "$first_ref" "$context" < /dev/null
-          while read -r key; do
-            ref=$(echo "$TAGS" | jq -r --arg k "$key" '.[$k]')
-            docker tag "$first_ref" "$ref" < /dev/null
-          done < <(echo "$build" | jq -r '.keys[1:][]')
-          while read -r key; do
-            docker push "$(echo "$TAGS" | jq -r --arg k "$key" '.[$k]')" < /dev/null
-          done < <(echo "$build" | jq -r '.keys[]')
-        done < <(echo "$PLAN" | jq -c '.builds[]')
+      run: >-
+        PYTHONPATH="${{ github.action_path }}/../../.."
+        python3 -m cloudtool docker-build
+        --tool-json "${{ inputs.tool-json }}"
+        --tool-name "${{ inputs.tool-name }}"
+        --registry "${{ inputs.registry }}"
+        --git-sha "${{ inputs.git-sha }}"

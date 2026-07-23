@@ -21,9 +21,13 @@ runs:
   using: composite
   steps:
     - shell: bash
+      run: pip install -q -r "${{ github.action_path }}/../../../requirements.txt"
+
+    - shell: bash
       run: >-
-        "${{ github.action_path }}/resolve-config.sh"
-        "${{ inputs.tool-json }}"
-        "${{ inputs.platform-config-dir }}/${{ inputs.environment }}.yml"
-        "${{ inputs.environment }}"
-        "${{ inputs.out-file }}"
+        PYTHONPATH="${{ github.action_path }}/../../.."
+        python3 -m cloudtool resolve-config
+        --tool-json "${{ inputs.tool-json }}"
+        --platform-file "${{ inputs.platform-config-dir }}/${{ inputs.environment }}.yml"
+        --environment "${{ inputs.environment }}"
+        --out-file "${{ inputs.out-file }}"

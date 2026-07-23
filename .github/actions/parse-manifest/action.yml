@@ -23,10 +23,14 @@ outputs:
 runs:
   using: composite
   steps:
+    - shell: bash
+      run: pip install -q -r "${{ github.action_path }}/../../../requirements.txt"
+
     - id: parse
       shell: bash
       run: >-
-        "${{ github.action_path }}/parse-manifest.sh"
-        "${{ inputs.manifest }}"
-        "${{ inputs.output-dir }}"
-        "${{ inputs.app-root }}"
+        PYTHONPATH="${{ github.action_path }}/../../.."
+        python3 -m cloudtool parse-manifest
+        --manifest "${{ inputs.manifest }}"
+        --output-dir "${{ inputs.output-dir }}"
+        --app-root "${{ inputs.app-root }}"

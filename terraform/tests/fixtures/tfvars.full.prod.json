@@ -1,17 +1,5 @@
 {
   "config": {
-    "storage": {
-      "containers": [
-        "uploads"
-      ],
-      "public_access": false
-    },
-    "database": {
-      "type": "postgres",
-      "size": "medium",
-      "storage_gb": 32,
-      "public_access": false
-    },
     "name": "orders-api",
     "apps": {
       "api": {
@@ -64,6 +52,18 @@
         },
         "secrets": []
       }
+    },
+    "database": {
+      "type": "postgres",
+      "size": "medium",
+      "storage_gb": 32,
+      "public_access": false
+    },
+    "storage": {
+      "containers": [
+        "uploads"
+      ],
+      "public_access": false
     },
     "environment": "prod",
     "platform": {

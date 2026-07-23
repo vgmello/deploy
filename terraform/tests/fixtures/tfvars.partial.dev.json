@@ -1,12 +1,12 @@
 {
   "config": {
+    "name": "partial",
     "database": {
       "type": "postgres",
       "size": "large",
       "storage_gb": 32,
       "public_access": false
     },
-    "name": "partial",
     "functions": {
       "relay": {
         "env": {},
