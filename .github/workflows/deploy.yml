@@ -25,9 +25,14 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   setup:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -51,10 +56,17 @@ jobs:
           app-root: "."
 
       - shell: bash
+        env:
+          ENVIRONMENTS: ${{ steps.parse.outputs.environments }}
+          ENV_FILTER: ${{ inputs.environment }}
         run: |
-          COUNT=$(echo '${{ steps.parse.outputs.environments }}' | jq 'length')
+          COUNT=$(echo "$ENVIRONMENTS" | jq 'length')
           if [ "$COUNT" -gt 4 ]; then
             echo "::error::at most 4 environments are supported (manifest declares $COUNT)"
+            exit 1
+          fi
+          if [ -n "$ENV_FILTER" ] && ! echo "$ENVIRONMENTS" | jq -e --arg e "$ENV_FILTER" 'index($e)' > /dev/null; then
+            echo "::error::environment '$ENV_FILTER' is not declared in the manifest ($(echo "$ENVIRONMENTS" | jq -r 'join(", ")'))"
             exit 1
           fi
 
@@ -67,6 +79,7 @@ jobs:
     needs: setup
     if: ${{ needs.setup.outputs.docker == 'true' && inputs.plan_only == false }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
@@ -119,6 +132,7 @@ jobs:
     needs: [setup, build]
     if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[0] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[0]) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -153,7 +167,9 @@ jobs:
             echo "client_id=$(yq '.deploy.client_id' "$FILE")"
             echo "tenant_id=$(yq '.tenant_id' "$FILE")"
             echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            echo "keyvault=$(python3 -c "import sys; n='kv-'+sys.argv[1]+'-'+sys.argv[2]; print(n[:24].rstrip('-'))" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")"
+            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
+            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
+            echo "keyvault=$KV"
           } >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@v2
@@ -199,6 +215,7 @@ jobs:
         with:
           tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
+          require-vault: "true"
 
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
@@ -217,8 +234,9 @@ jobs:
 
   deploy-1:
     needs: [setup, build, deploy-0]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[1] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[1]) }}
+    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[1] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[1]) && !(inputs.plan_only && inputs.environment == '') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -253,7 +271,9 @@ jobs:
             echo "client_id=$(yq '.deploy.client_id' "$FILE")"
             echo "tenant_id=$(yq '.tenant_id' "$FILE")"
             echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            echo "keyvault=$(python3 -c "import sys; n='kv-'+sys.argv[1]+'-'+sys.argv[2]; print(n[:24].rstrip('-'))" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")"
+            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
+            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
+            echo "keyvault=$KV"
           } >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@v2
@@ -299,6 +319,7 @@ jobs:
         with:
           tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
+          require-vault: "true"
 
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
@@ -317,8 +338,9 @@ jobs:
 
   deploy-2:
     needs: [setup, build, deploy-1]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[2] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[2]) }}
+    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[2] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[2]) && !(inputs.plan_only && inputs.environment == '') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -353,7 +375,9 @@ jobs:
             echo "client_id=$(yq '.deploy.client_id' "$FILE")"
             echo "tenant_id=$(yq '.tenant_id' "$FILE")"
             echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            echo "keyvault=$(python3 -c "import sys; n='kv-'+sys.argv[1]+'-'+sys.argv[2]; print(n[:24].rstrip('-'))" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")"
+            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
+            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
+            echo "keyvault=$KV"
           } >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@v2
@@ -399,6 +423,7 @@ jobs:
         with:
           tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
+          require-vault: "true"
 
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
@@ -417,8 +442,9 @@ jobs:
 
   deploy-3:
     needs: [setup, build, deploy-2]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[3] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[3]) }}
+    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[3] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[3]) && !(inputs.plan_only && inputs.environment == '') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -453,7 +479,9 @@ jobs:
             echo "client_id=$(yq '.deploy.client_id' "$FILE")"
             echo "tenant_id=$(yq '.tenant_id' "$FILE")"
             echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            echo "keyvault=$(python3 -c "import sys; n='kv-'+sys.argv[1]+'-'+sys.argv[2]; print(n[:24].rstrip('-'))" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")"
+            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
+            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
+            echo "keyvault=$KV"
           } >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@v2
@@ -499,6 +527,7 @@ jobs:
         with:
           tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
+          require-vault: "true"
 
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy

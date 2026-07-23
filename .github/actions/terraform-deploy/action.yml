@@ -37,13 +37,15 @@ runs:
   steps:
     - id: prepare
       shell: bash
+      env:
+        TAGS_INPUT: ${{ inputs.image-tags }}
       run: |
         set -euo pipefail
         "${{ github.action_path }}/render-backend-config.sh" \
           "${{ inputs.platform-file }}" "${{ inputs.tool-name }}" "${{ inputs.environment }}" \
           > backend.conf
 
-        TAGS='${{ inputs.image-tags }}'
+        TAGS="$TAGS_INPUT"
         if [ "${{ inputs.plan-only }}" = "true" ] && [ "$(echo "$TAGS" | jq 'length')" -eq 0 ]; then
           REGISTRY="$(yq '.acr.login_server' "${{ inputs.platform-file }}")"
           TAGS="$("${{ github.action_path }}/../docker-build/enumerate-builds.sh" \
@@ -52,7 +54,7 @@ runs:
         echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
 
         if [ "$(yq '.runner_access' "${{ inputs.platform-file }}")" = "public-allowlist" ]; then
-          echo "runner_ip=$(curl -fsS https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+          echo "runner_ip=$(curl -fsS --retry 3 --retry-delay 5 https://api.ipify.org)" >> "$GITHUB_OUTPUT"
         else
           echo "runner_ip=" >> "$GITHUB_OUTPUT"
         fi
@@ -66,16 +68,27 @@ runs:
       shell: bash
       env:
         TF_IN_AUTOMATION: "true"
+        IMAGE_TAGS: ${{ steps.prepare.outputs.tags }}
+        RUNNER_IP: ${{ steps.prepare.outputs.runner_ip }}
+        TARGETS: ${{ inputs.targets }}
       run: |
         set -euo pipefail
         TFVARS="$(cd "$(dirname "${{ inputs.tfvars-file }}")" && pwd)/$(basename "${{ inputs.tfvars-file }}")"
-        ARGS=(-input=false -var-file="$TFVARS" -var "image_tags=${{ steps.prepare.outputs.tags }}")
-        if [ -n "${{ steps.prepare.outputs.runner_ip }}" ]; then
-          ARGS+=(-var "runner_ip=${{ steps.prepare.outputs.runner_ip }}")
+        ARGS=(-input=false -var-file="$TFVARS" -var "image_tags=$IMAGE_TAGS")
+        if [ -n "$RUNNER_IP" ]; then
+          ARGS+=(-var "runner_ip=$RUNNER_IP")
         fi
-        for t in ${{ inputs.targets }}; do ARGS+=(-target="$t"); done
+        for t in $TARGETS; do ARGS+=(-target="$t"); done
 
         terraform -chdir="${{ inputs.terraform-dir }}" plan "${ARGS[@]}" -out=tfplan | tail -20
+        {
+          echo "<details><summary>terraform plan (${{ inputs.environment }})</summary>"
+          echo
+          echo '```'
+          terraform -chdir="${{ inputs.terraform-dir }}" show -no-color tfplan | head -200
+          echo '```'
+          echo "</details>"
+        } >> "$GITHUB_STEP_SUMMARY"
 
         if [ "${{ inputs.plan-only }}" = "true" ]; then
           echo "summary=plan only (${{ inputs.environment }})" >> "$GITHUB_OUTPUT"

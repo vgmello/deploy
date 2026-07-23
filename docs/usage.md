@@ -38,6 +38,7 @@ jobs:
     secrets: inherit
     with:
       plan_only: ${{ github.event_name == 'pull_request' }}
+      deploy_ref: v1   # keep in lockstep with the @v1 pin above
 ```
 
 ## 3. Configure GitHub environments
@@ -55,5 +56,14 @@ required reviewers on `prod` — that is the approval gate. Add any manifest
   image builds; images are built once and promoted across environments.
   Docker settings must not vary per environment; the ACR is assumed shared.
 - `workflow_dispatch`-style single-env deploys: pass `environment: dev`.
+- PR plan-only runs plan against the first environment only, so protected
+  environment gates are never touched by PRs.
 - Azure OIDC: each environment's deploy service principal (client id in
-  `environments/<env>.yml`) needs a federated credential for your repo.
+  `environments/<env>.yml`) needs a federated credential for your repo, plus
+  Key Vault Secrets Officer at resource-group (or subscription) scope so
+  sync-secrets can write manifest secrets.
+- `runner_access: private` environments require self-hosted runners inside
+  the VNet — GitHub-hosted runners cannot reach a firewalled Key Vault.
+- One manifest (one platform call) per workflow run: the config artifact
+  name is fixed, so calling the reusable workflow twice in a single run is
+  not supported.
