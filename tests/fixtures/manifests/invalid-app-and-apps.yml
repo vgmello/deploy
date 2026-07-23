@@ -1,0 +1,5 @@
+name: orders-api
+app:
+  port: 8080
+apps:
+  api: {}

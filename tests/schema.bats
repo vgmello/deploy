@@ -68,3 +68,13 @@ validate() {
   run validate invalid-db-type.yml
   [ "$status" -ne 0 ]
 }
+
+@test "singular app shorthand is valid" {
+  run validate minimal.yml
+  [ "$status" -eq 0 ]
+}
+
+@test "app and apps together is invalid" {
+  run validate invalid-app-and-apps.yml
+  [ "$status" -ne 0 ]
+}

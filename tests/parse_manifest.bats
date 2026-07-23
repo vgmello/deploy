@@ -74,3 +74,14 @@ teardown() { rm -rf "$TMP"; }
   [ "$status" -eq 0 ]
   grep -q '^docker=true$' "$TMP/out/outputs.txt"
 }
+
+@test "app shorthand folds into apps.main" {
+  run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.apps | keys | join(",")' "$TMP/out/tool.dev.json")" = "main" ]
+}
+
+@test "overlay app mixed with base apps fails" {
+  run "$SCRIPT" "$FIXTURES/invalid-overlay-app-mix.yml" "$TMP/out"
+  [ "$status" -ne 0 ]
+}

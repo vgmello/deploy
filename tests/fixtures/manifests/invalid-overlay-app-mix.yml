@@ -1,0 +1,8 @@
+name: orders-api
+apps:
+  api: {}
+environments:
+  dev: {}
+  prod:
+    app:
+      port: 9090

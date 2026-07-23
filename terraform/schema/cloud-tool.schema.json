@@ -10,6 +10,11 @@
   "anyOf": [
     {
       "required": [
+        "app"
+      ]
+    },
+    {
+      "required": [
         "apps"
       ]
     },
@@ -28,6 +33,9 @@
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]{1,29}$"
+    },
+    "app": {
+      "$ref": "#/$defs/app"
     },
     "apps": {
       "type": "object",
@@ -279,6 +287,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "app": {
+          "$ref": "#/$defs/app"
+        },
         "apps": {
           "type": "object",
           "additionalProperties": {
@@ -374,5 +385,15 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "not": {
+        "required": [
+          "app",
+          "apps"
+        ]
+      }
+    }
+  ]
 }

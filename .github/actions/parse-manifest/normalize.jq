@@ -36,4 +36,8 @@ def norm_app:
     + {"replicas": ({"min": 1, "max": 3} + ($app.replicas // {}))}
     + {"containers": $containers};
 
-if .apps != null then .apps |= map_values(norm_app) else . end
+if .app != null and .apps != null then
+  error("manifest mixes singular app with apps (possibly via an environment overlay); use one form")
+else . end
+| if .app != null then .apps = {"main": .app} | del(.app) else . end
+| if .apps != null then .apps |= map_values(norm_app) else . end
