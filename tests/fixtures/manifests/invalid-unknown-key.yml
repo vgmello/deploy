@@ -1,0 +1,4 @@
+name: orders-api
+type: container-app
+databse:
+  size: small
