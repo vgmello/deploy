@@ -1,0 +1,95 @@
+name: sync-secrets
+description: Push GHA environment secrets listed in the manifest into the tool's Key Vault (idempotent; tolerates a not-yet-created vault)
+inputs:
+  tool-json:
+    description: Path to tool.<env>.json
+    required: true
+  keyvault-name:
+    description: Target Key Vault name
+    required: true
+  require-vault:
+    description: Fail hard when the vault does not exist (set on the post-apply sync)
+    default: "false"
+outputs:
+  vault-exists:
+    description: "true when the vault exists and secrets were synced"
+    value: ${{ steps.sync.outputs.vault-exists }}
+  secret-count:
+    description: Number of manifest secrets
+    value: ${{ steps.sync.outputs.secret-count }}
+runs:
+  using: composite
+  steps:
+    - id: sync
+      shell: bash
+      run: |
+        set -euo pipefail
+        SECRETS_JSON="$("${{ github.action_path }}/collect-secrets.sh" "${{ inputs.tool-json }}")"
+        COUNT=$(echo "$SECRETS_JSON" | jq 'length')
+        echo "secret-count=$COUNT" >> "$GITHUB_OUTPUT"
+
+        if [ "$COUNT" -eq 0 ]; then
+          echo "vault-exists=true" >> "$GITHUB_OUTPUT"
+          echo "no manifest secrets to sync"
+          exit 0
+        fi
+
+        : "${ALL_SECRETS:?ALL_SECRETS env must carry toJSON(secrets)}"
+        MISSING=$(echo "$SECRETS_JSON" | jq -r --argjson all "$(echo "$ALL_SECRETS" | jq 'keys')" \
+          '[.[] | select(.name as $n | $all | index($n) | not) | .name] | join(", ")')
+        if [ -n "$MISSING" ]; then
+          echo "::error::missing GitHub environment secrets: $MISSING"
+          exit 1
+        fi
+
+        SHOW_ERR=""
+        if ! SHOW_ERR=$(az keyvault show --name "${{ inputs.keyvault-name }}" 2>&1 > /dev/null); then
+          if echo "$SHOW_ERR" | grep -qiE 'ResourceNotFound|was not found|could not be found'; then
+            if [ "${{ inputs.require-vault }}" = "true" ]; then
+              echo "::error::key vault ${{ inputs.keyvault-name }} still missing after the targeted apply"
+              exit 1
+            fi
+            echo "vault-exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::key vault ${{ inputs.keyvault-name }} not created yet; deferring secret sync"
+            exit 0
+          fi
+          echo "::error::az keyvault show failed for a reason other than not-found:"
+          echo "$SHOW_ERR"
+          exit 1
+        fi
+        echo "vault-exists=true" >> "$GITHUB_OUTPUT"
+
+        # GitHub-hosted runners change IP per job; the vault firewall holds the
+        # previous apply's runner IP. Allowlist this runner before data-plane
+        # calls; the next terraform apply reconciles ip_rules to the same IP.
+        RUNNER_IP=$(curl -fsS --retry 3 --retry-delay 5 https://api.ipify.org || true)
+        if [ -n "$RUNNER_IP" ]; then
+          az keyvault network-rule add --name "${{ inputs.keyvault-name }}" \
+            --ip-address "$RUNNER_IP" --output none < /dev/null 2>/dev/null \
+            || echo "::warning::could not allowlist runner IP on ${{ inputs.keyvault-name }}; secret writes may hit the vault firewall"
+        fi
+
+        set_secret() { # kv_name value
+          local attempt
+          for attempt in 1 2; do
+            if az keyvault secret set --vault-name "${{ inputs.keyvault-name }}" \
+                 --name "$1" --value "$2" --output none < /dev/null; then
+              return 0
+            fi
+            [ "$attempt" = "1" ] && { echo "::warning::secret set failed for $1; retrying in 15s (RBAC propagation)"; sleep 15; }
+          done
+          return 1
+        }
+
+        while read -r entry; do
+          NAME=$(echo "$entry" | jq -r .name)
+          KV_NAME=$(echo "$entry" | jq -r .kv_name)
+          VALUE=$(echo "$ALL_SECRETS" | jq -r --arg n "$NAME" '.[$n]')
+          CURRENT=$(az keyvault secret show --vault-name "${{ inputs.keyvault-name }}" --name "$KV_NAME" --query value -o tsv < /dev/null 2>/dev/null || true)
+          if [ "$CURRENT" != "$VALUE" ]; then
+            set_secret "$KV_NAME" "$VALUE"
+            echo "synced $KV_NAME"
+          else
+            echo "$KV_NAME unchanged"
+          fi
+        done < <(echo "$SECRETS_JSON" | jq -c '.[]')

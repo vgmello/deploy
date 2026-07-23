@@ -1,0 +1,105 @@
+name: terraform-deploy
+description: Init with azurerm backend, plan, and (unless plan-only) apply the platform Terraform for one environment
+inputs:
+  terraform-dir:
+    description: Path to the platform terraform root (checked-out deploy repo)
+    required: true
+  tfvars-file:
+    description: tfvars.json produced by resolve-config
+    required: true
+  image-tags:
+    description: JSON map <key> -> image reference from docker-build
+    default: "{}"
+  tool-json:
+    description: tool.<env>.json, used to derive placeholder tags for plan-only runs
+    required: true
+  tool-name:
+    description: Tool name (state key prefix)
+    required: true
+  environment:
+    description: Environment name
+    required: true
+  platform-file:
+    description: Platform env yml (backend + runner_access)
+    required: true
+  plan-only:
+    description: Plan without applying
+    default: "false"
+  targets:
+    description: Space-separated -target addresses for a partial apply
+    default: ""
+outputs:
+  summary:
+    description: One-line plan/apply summary
+    value: ${{ steps.apply.outputs.summary }}
+runs:
+  using: composite
+  steps:
+    - id: prepare
+      shell: bash
+      env:
+        TAGS_INPUT: ${{ inputs.image-tags }}
+      run: |
+        set -euo pipefail
+        "${{ github.action_path }}/render-backend-config.sh" \
+          "${{ inputs.platform-file }}" "${{ inputs.tool-name }}" "${{ inputs.environment }}" \
+          > backend.conf
+
+        TAGS="$TAGS_INPUT"
+        if [ "${{ inputs.plan-only }}" = "true" ] && [ "$(echo "$TAGS" | jq 'length')" -eq 0 ]; then
+          REGISTRY="$(yq '.acr.login_server' "${{ inputs.platform-file }}")"
+          TAGS="$("${{ github.action_path }}/../docker-build/enumerate-builds.sh" \
+            "${{ inputs.tool-json }}" "${{ inputs.tool-name }}" "$REGISTRY" plan-placeholder | jq -c .tags)"
+        fi
+        echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+        if [ "$(yq '.runner_access' "${{ inputs.platform-file }}")" = "public-allowlist" ]; then
+          echo "runner_ip=$(curl -fsS --retry 3 --retry-delay 5 https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+        else
+          echo "runner_ip=" >> "$GITHUB_OUTPUT"
+        fi
+
+    - shell: bash
+      run: |
+        terraform -chdir="${{ inputs.terraform-dir }}" init -input=false \
+          $(sed 's/^/-backend-config=/' backend.conf | tr '\n' ' ')
+
+    - id: apply
+      shell: bash
+      env:
+        TF_IN_AUTOMATION: "true"
+        IMAGE_TAGS: ${{ steps.prepare.outputs.tags }}
+        RUNNER_IP: ${{ steps.prepare.outputs.runner_ip }}
+        TARGETS: ${{ inputs.targets }}
+      run: |
+        set -euo pipefail
+        TFVARS="$(cd "$(dirname "${{ inputs.tfvars-file }}")" && pwd)/$(basename "${{ inputs.tfvars-file }}")"
+        ARGS=(-input=false -var-file="$TFVARS" -var "image_tags=$IMAGE_TAGS")
+        if [ -n "$RUNNER_IP" ]; then
+          ARGS+=(-var "runner_ip=$RUNNER_IP")
+        fi
+        for t in $TARGETS; do ARGS+=(-target="$t"); done
+
+        terraform -chdir="${{ inputs.terraform-dir }}" plan "${ARGS[@]}" -out=tfplan | tail -20
+        terraform -chdir="${{ inputs.terraform-dir }}" show -no-color tfplan > plan.txt
+        {
+          echo "<details><summary>terraform plan (${{ inputs.environment }})</summary>"
+          echo
+          echo '```'
+          head -200 plan.txt
+          echo '```'
+          echo "</details>"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "${{ inputs.plan-only }}" = "true" ]; then
+          echo "summary=plan only (${{ inputs.environment }})" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if ! terraform -chdir="${{ inputs.terraform-dir }}" apply -input=false tfplan; then
+          echo "::warning::apply failed; retrying once in 30s (RBAC propagation)"
+          sleep 30
+          terraform -chdir="${{ inputs.terraform-dir }}" plan "${ARGS[@]}" -out=tfplan > /dev/null
+          terraform -chdir="${{ inputs.terraform-dir }}" apply -input=false tfplan
+        fi
+        echo "summary=applied ${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
