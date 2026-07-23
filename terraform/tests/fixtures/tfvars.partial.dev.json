@@ -1,0 +1,79 @@
+{
+  "config": {
+    "database": {
+      "type": "postgres",
+      "size": "large",
+      "storage_gb": 32,
+      "public_access": false
+    },
+    "name": "partial",
+    "functions": {
+      "relay": {
+        "env": {},
+        "secrets": [],
+        "image": "myacr.azurecr.io/relay:2.0"
+      }
+    },
+    "static_sites": {
+      "docs": {
+        "env": {}
+      }
+    },
+    "apps": {
+      "main": {
+        "ingress": {
+          "external": false,
+          "target_port": 5000,
+          "transport": "http2",
+          "allow_insecure": false
+        },
+        "replicas": {
+          "min": 2,
+          "max": 3
+        },
+        "containers": {
+          "main": {
+            "cpu": 0.5,
+            "memory": "1Gi",
+            "env": {},
+            "secrets": []
+          }
+        }
+      }
+    },
+    "environment": "dev",
+    "platform": {
+      "subscription_id": "00000000-0000-0000-0000-000000000000",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "location": "eastus2",
+      "naming_prefix": "",
+      "network": {
+        "vnet_id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev",
+        "subnets": {
+          "private_endpoints": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev/subnets/snet-pe",
+          "functions": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev/subnets/snet-func"
+        },
+        "private_dns_zone_ids": {
+          "postgres": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com",
+          "blob": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net",
+          "keyvault": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net",
+          "sqlserver": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net"
+        }
+      },
+      "acr": {
+        "login_server": "acrplatformdev.azurecr.io",
+        "resource_group": "rg-platform-dev"
+      },
+      "terraform_state": {
+        "resource_group": "rg-tfstate",
+        "storage_account": "sttfstatedev",
+        "container": "tfstate"
+      },
+      "deploy": {
+        "client_id": "00000000-0000-0000-0000-000000000000"
+      },
+      "runner_access": "public-allowlist",
+      "container_apps_environment_id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-platform-dev/providers/Microsoft.App/managedEnvironments/cae-platform-dev"
+    }
+  }
+}
