@@ -1,0 +1,9 @@
+[run]
+source = cloudtool
+omit =
+    cloudtool/__main__.py
+    cloudtool/runner.py
+
+[report]
+exclude_lines =
+    if __name__ == .__main__.:
