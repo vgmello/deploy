@@ -207,7 +207,9 @@ jobs:
 - **Approvals:** app repos define GitHub environments; prod configured with required reviewers gates automatically. Dev is unprotected, so it deploys immediately. GitHub owns approvals, not the platform.
 - **Auth:** OIDC federated credentials to Azure — no stored client secrets. Deploy service principal per environment; IDs live in platform env config.
 - **PR behavior:** on `pull_request`, plan-only against dev, plan posted as a PR comment.
-- **Env ordering:** manifest key order = deploy order, sequential; first failure stops the chain, later envs untouched.
+- **Env ordering:** manifest key order = deploy order, sequential; first failure stops the chain, later envs untouched. Maximum 4 environments (indexed job chain).
+- **First deploy:** if the Key Vault does not exist yet and the manifest lists secrets, the workflow runs a targeted `-target=module.keyvault` apply, syncs secrets, then the full apply.
+- **Build-once constraints:** docker settings must not vary per environment; the ACR is assumed shared across environments (first env's ACR is used).
 - **Workflow inputs:** `manifest` (path, default `.cloud-tool.yml`), `environment` (single-env deploy for workflow_dispatch), `plan_only`.
 - **Secrets:** `secrets: inherit` from the app repo; `sync-secrets` reads GHA environment secrets matching names listed in the manifest.
 
