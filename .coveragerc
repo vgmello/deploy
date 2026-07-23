@@ -1,8 +1,8 @@
 [run]
-source = cloudtool
+source = cloudapp
 omit =
-    cloudtool/__main__.py
-    cloudtool/runner.py
+    cloudapp/__main__.py
+    cloudapp/runner.py
 
 [report]
 exclude_lines =

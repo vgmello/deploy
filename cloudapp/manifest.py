@@ -1,4 +1,4 @@
-"""Manifest pipeline: validate .cloud-tool.yml, merge env overlays, normalize.
+"""Manifest pipeline: validate .cloud-app.yml, merge env overlays, normalize.
 
 Normalized shape (per environment) is the Terraform contract: every app has an
 explicit ``containers`` map and a full ingress object (or none for workers);
@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 from .yamlcompat import load_yaml as _load_yaml_12
 
 _PKG = Path(__file__).parent
-SCHEMA_PATH = _PKG.parent / "terraform" / "schema" / "cloud-tool.schema.json"
+SCHEMA_PATH = _PKG.parent / "terraform" / "schema" / "cloud-app.schema.json"
 DEFAULTS_DIR = _PKG / "defaults"
 
 CONTAINER_DEFAULTS = {"cpu": 0.5, "memory": "1Gi", "env": {}, "secrets": []}

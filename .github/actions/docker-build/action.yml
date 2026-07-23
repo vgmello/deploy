@@ -27,7 +27,7 @@ runs:
       shell: bash
       run: >-
         PYTHONPATH="${{ github.action_path }}/../../.."
-        python3 -m cloudtool docker-build
+        python3 -m cloudapp docker-build
         --tool-json "${{ inputs.tool-json }}"
         --tool-name "${{ inputs.tool-name }}"
         --registry "${{ inputs.registry }}"

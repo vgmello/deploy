@@ -26,7 +26,7 @@ runs:
     - shell: bash
       run: >-
         PYTHONPATH="${{ github.action_path }}/../../.."
-        python3 -m cloudtool resolve-config
+        python3 -m cloudapp resolve-config
         --tool-json "${{ inputs.tool-json }}"
         --platform-file "${{ inputs.platform-config-dir }}/${{ inputs.environment }}.yml"
         --environment "${{ inputs.environment }}"

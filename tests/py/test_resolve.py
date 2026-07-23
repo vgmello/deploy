@@ -1,6 +1,6 @@
 import pytest
 
-from cloudtool import manifest, resolve
+from cloudapp import manifest, resolve
 from conftest import ENVDIR, FIXTURES, load_golden
 
 

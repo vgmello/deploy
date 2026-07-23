@@ -1,8 +1,8 @@
-# Using the cloud-tool platform
+# Using the cloudapp platform
 
 ## 1. Add a manifest
 
-`.cloud-tool.yml` at your repo root:
+`.cloud-app.yml` at your repo root:
 
 ```yaml
 name: orders-api

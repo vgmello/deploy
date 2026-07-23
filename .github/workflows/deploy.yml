@@ -5,9 +5,9 @@ on:
   workflow_call:
     inputs:
       manifest:
-        description: Path to the cloud-tool manifest in the app repo
+        description: Path to the cloud-app manifest in the app repo
         type: string
-        default: .cloud-tool.yml
+        default: .cloud-app.yml
       environment:
         description: Deploy a single environment only (empty = full chain)
         type: string
@@ -52,7 +52,7 @@ jobs:
         uses: ./.deploy/.github/actions/parse-manifest
         with:
           manifest: ${{ inputs.manifest }}
-          output-dir: .cloud-tool
+          output-dir: .cloud-app
           app-root: "."
 
       - shell: bash
@@ -72,8 +72,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cloud-tool-config
-          path: .cloud-tool/tool.*.json
+          name: cloud-app-config
+          path: .cloud-app/tool.*.json
 
   build:
     needs: setup
@@ -96,8 +96,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cloud-tool-config
-          path: .cloud-tool
+          name: cloud-app-config
+          path: .cloud-app
 
       # Build once against the first environment's config: docker settings must
       # not vary per env, and the ACR is assumed shared across environments.
@@ -123,7 +123,7 @@ jobs:
       - id: build
         uses: ./.deploy/.github/actions/docker-build
         with:
-          tool-json: .cloud-tool/tool.${{ steps.env0.outputs.name }}.json
+          tool-json: .cloud-app/tool.${{ steps.env0.outputs.name }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           registry: ${{ steps.env0.outputs.registry }}
           git-sha: ${{ github.sha }}
@@ -151,8 +151,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cloud-tool-config
-          path: .cloud-tool
+          name: cloud-app-config
+          path: .cloud-app
 
       - id: platform
         shell: bash
@@ -181,7 +181,7 @@ jobs:
       - id: resolve
         uses: ./.deploy/.github/actions/resolve-config
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           environment: ${{ env.DEPLOY_ENV }}
           platform-config-dir: .deploy/environments
           out-file: tfvars.json
@@ -192,7 +192,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
 
       - name: First-deploy targeted apply (key vault before secrets)
@@ -201,7 +201,7 @@ jobs:
         with:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -213,7 +213,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
           require-vault: "true"
 
@@ -223,7 +223,7 @@ jobs:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -255,8 +255,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cloud-tool-config
-          path: .cloud-tool
+          name: cloud-app-config
+          path: .cloud-app
 
       - id: platform
         shell: bash
@@ -285,7 +285,7 @@ jobs:
       - id: resolve
         uses: ./.deploy/.github/actions/resolve-config
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           environment: ${{ env.DEPLOY_ENV }}
           platform-config-dir: .deploy/environments
           out-file: tfvars.json
@@ -296,7 +296,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
 
       - name: First-deploy targeted apply (key vault before secrets)
@@ -305,7 +305,7 @@ jobs:
         with:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -317,7 +317,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
           require-vault: "true"
 
@@ -327,7 +327,7 @@ jobs:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -359,8 +359,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cloud-tool-config
-          path: .cloud-tool
+          name: cloud-app-config
+          path: .cloud-app
 
       - id: platform
         shell: bash
@@ -389,7 +389,7 @@ jobs:
       - id: resolve
         uses: ./.deploy/.github/actions/resolve-config
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           environment: ${{ env.DEPLOY_ENV }}
           platform-config-dir: .deploy/environments
           out-file: tfvars.json
@@ -400,7 +400,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
 
       - name: First-deploy targeted apply (key vault before secrets)
@@ -409,7 +409,7 @@ jobs:
         with:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -421,7 +421,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
           require-vault: "true"
 
@@ -431,7 +431,7 @@ jobs:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -463,8 +463,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: cloud-tool-config
-          path: .cloud-tool
+          name: cloud-app-config
+          path: .cloud-app
 
       - id: platform
         shell: bash
@@ -493,7 +493,7 @@ jobs:
       - id: resolve
         uses: ./.deploy/.github/actions/resolve-config
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           environment: ${{ env.DEPLOY_ENV }}
           platform-config-dir: .deploy/environments
           out-file: tfvars.json
@@ -504,7 +504,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
 
       - name: First-deploy targeted apply (key vault before secrets)
@@ -513,7 +513,7 @@ jobs:
         with:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}
@@ -525,7 +525,7 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
         with:
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           keyvault-name: ${{ steps.platform.outputs.keyvault }}
           require-vault: "true"
 
@@ -535,7 +535,7 @@ jobs:
           terraform-dir: .deploy/terraform
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-tool/tool.${{ env.DEPLOY_ENV }}.json
+          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
           environment: ${{ env.DEPLOY_ENV }}
           platform-file: ${{ steps.platform.outputs.file }}

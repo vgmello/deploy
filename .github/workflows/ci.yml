@@ -17,7 +17,7 @@ jobs:
         run: python3 -m pip install --user -q -r requirements-dev.txt
 
       - name: Run tests
-        run: python3 -m pytest tests/py -q --cov=cloudtool --cov-report=term-missing --cov-fail-under=90
+        run: python3 -m pytest tests/py -q --cov=cloudapp --cov-report=term-missing --cov-fail-under=90
 
       - name: Lint workflows
         run: |

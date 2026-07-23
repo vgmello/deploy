@@ -1,4 +1,4 @@
-from cloudtool.yamlcompat import load_yaml
+from cloudapp.yamlcompat import load_yaml
 
 
 def test_yaml_11_boolean_words_stay_strings():
