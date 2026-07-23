@@ -14,9 +14,9 @@ jobs:
         run: sudo npm install -g bats
 
       - name: Run tests
-        env:
-          GITHUB_OUTPUT: ""
-        run: bats tests/
+        run: |
+          unset GITHUB_OUTPUT
+          bats tests/
 
       - name: Lint workflows
         run: |
