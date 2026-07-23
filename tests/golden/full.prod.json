@@ -1,0 +1,16 @@
+{
+  "name": "orders-api",
+  "type": "container-app",
+  "app": {
+    "port": 8080,
+    "ingress": "internal",
+    "cpu": 0.5,
+    "memory": "1Gi",
+    "replicas": { "min": 2, "max": 10 },
+    "docker": { "file": "./Dockerfile", "context": "." },
+    "env": { "LOG_LEVEL": "warn" },
+    "secrets": ["STRIPE_KEY"]
+  },
+  "database": { "size": "medium", "storage_gb": 32, "public_access": false },
+  "storage": { "containers": ["uploads"], "public_access": false }
+}
