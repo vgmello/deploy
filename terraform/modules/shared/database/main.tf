@@ -1,0 +1,83 @@
+locals {
+  pg_sku  = { small = "B_Standard_B1ms", medium = "GP_Standard_D2ds_v4", large = "GP_Standard_D4ds_v4" }
+  sql_sku = { small = "S0", medium = "S2", large = "S4" }
+
+  is_postgres = var.type == "postgres"
+  fqdn        = local.is_postgres ? "${var.name}.postgres.database.azure.com" : "${var.name}.database.windows.net"
+
+  connection_string = local.is_postgres ? (
+    "postgresql://dbadmin:${random_password.admin.result}@${local.fqdn}:5432/main?sslmode=require"
+    ) : (
+    "Server=tcp:${local.fqdn},1433;Database=main;User ID=dbadmin;Password=${random_password.admin.result};Encrypt=true;"
+  )
+}
+
+resource "random_password" "admin" {
+  length  = 32
+  special = false
+}
+
+resource "azurerm_postgresql_flexible_server" "this" {
+  count = local.is_postgres ? 1 : 0
+
+  name                          = var.name
+  location                      = var.location
+  resource_group_name           = var.resource_group_name
+  version                       = "16"
+  administrator_login           = "dbadmin"
+  administrator_password        = random_password.admin.result
+  sku_name                      = local.pg_sku[var.size]
+  storage_mb                    = var.storage_gb * 1024
+  public_network_access_enabled = var.public_access
+  zone                          = "1"
+}
+
+resource "azurerm_postgresql_flexible_server_database" "this" {
+  count = local.is_postgres ? 1 : 0
+
+  name      = "main"
+  server_id = azurerm_postgresql_flexible_server.this[0].id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+resource "azurerm_mssql_server" "this" {
+  count = local.is_postgres ? 0 : 1
+
+  name                          = var.name
+  location                      = var.location
+  resource_group_name           = var.resource_group_name
+  version                       = "12.0"
+  administrator_login           = "dbadmin"
+  administrator_login_password  = random_password.admin.result
+  minimum_tls_version           = "1.2"
+  public_network_access_enabled = var.public_access
+}
+
+resource "azurerm_mssql_database" "this" {
+  count = local.is_postgres ? 0 : 1
+
+  name        = "main"
+  server_id   = azurerm_mssql_server.this[0].id
+  sku_name    = local.sql_sku[var.size]
+  max_size_gb = var.storage_gb
+}
+
+module "private_endpoint" {
+  source = "../private-endpoint"
+  count  = var.public_access ? 0 : 1
+
+  name                = "pe-${var.name}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = var.private_endpoints_subnet_id
+  target_resource_id  = local.is_postgres ? azurerm_postgresql_flexible_server.this[0].id : azurerm_mssql_server.this[0].id
+  subresource         = local.is_postgres ? "postgresqlServer" : "sqlServer"
+  private_dns_zone_id = var.private_dns_zone_id
+}
+
+resource "azurerm_key_vault_secret" "database_url" {
+  name         = "database-url"
+  value        = local.connection_string
+  key_vault_id = var.keyvault_id
+}

@@ -1,0 +1,100 @@
+locals {
+  st_name = substr("stfn${replace(var.name, "-", "")}", 0, 24)
+
+  secret_refs = merge(
+    { for s in try(var.function.secrets, []) : s => lower(replace(s, "_", "-")) },
+    var.extra_secret_env,
+  )
+  kv_ref_settings = {
+    for env_name, secret_name in local.secret_refs :
+    env_name => "@Microsoft.KeyVault(SecretUri=${var.keyvault_vault_uri}secrets/${secret_name}/)"
+  }
+
+  image = try(var.function.image, null) != null ? var.function.image : var.image_tag
+
+  image_first_part   = local.image != null ? split("/", local.image)[0] : ""
+  image_has_registry = local.image != null ? (length(split("/", local.image)) > 1 ? (strcontains(local.image_first_part, ".") || strcontains(local.image_first_part, ":") || local.image_first_part == "localhost") : false) : false
+  image_registry     = local.image_has_registry ? local.image_first_part : "docker.io"
+  image_repo_tag     = local.image_has_registry ? join("/", slice(split("/", local.image), 1, length(split("/", local.image)))) : local.image
+  image_repo         = local.image != null ? split(":", local.image_repo_tag)[0] : null
+  image_tag_part     = local.image != null ? (length(split(":", local.image_repo_tag)) > 1 ? split(":", local.image_repo_tag)[1] : "latest") : null
+}
+
+resource "azurerm_user_assigned_identity" "this" {
+  name                = "id-${var.name}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_role_assignment" "keyvault" {
+  scope                = var.keyvault_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.this.principal_id
+}
+
+resource "azurerm_role_assignment" "acr" {
+  scope                = var.acr_id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.this.principal_id
+}
+
+resource "azurerm_storage_account" "functions" {
+  name                     = local.st_name
+  location                 = var.location
+  resource_group_name      = var.resource_group_name
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  min_tls_version          = "TLS1_2"
+}
+
+resource "azurerm_service_plan" "this" {
+  name                = "asp-${var.name}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  os_type             = "Linux"
+  sku_name            = "EP1"
+}
+
+resource "azurerm_linux_function_app" "this" {
+  name                = var.name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  service_plan_id     = azurerm_service_plan.this.id
+
+  storage_account_name       = azurerm_storage_account.functions.name
+  storage_account_access_key = azurerm_storage_account.functions.primary_access_key
+
+  virtual_network_subnet_id       = var.functions_subnet_id
+  key_vault_reference_identity_id = azurerm_user_assigned_identity.this.id
+  https_only                      = true
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.this.id]
+  }
+
+  site_config {
+    container_registry_use_managed_identity       = local.image != null
+    container_registry_managed_identity_client_id = local.image != null ? azurerm_user_assigned_identity.this.client_id : null
+
+    dynamic "application_stack" {
+      for_each = local.image != null ? [1] : []
+      content {
+        docker {
+          registry_url = "https://${local.image_registry}"
+          image_name   = local.image_repo
+          image_tag    = local.image_tag_part
+        }
+      }
+    }
+  }
+
+  app_settings = merge(try(var.function.env, {}), local.kv_ref_settings)
+
+  lifecycle {
+    precondition {
+      condition     = local.image != null
+      error_message = "function has no image: no image reference in the manifest and none supplied via image_tags"
+    }
+  }
+}

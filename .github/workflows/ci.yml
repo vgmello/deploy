@@ -23,3 +23,34 @@ jobs:
         run: |
           curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar xz actionlint
           ./actionlint -color
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Validate
+        run: |
+          terraform -chdir=terraform init -backend=false -input=false
+          terraform -chdir=terraform validate
+
+      - name: Fixtures in sync
+        run: |
+          ./scripts/generate-tf-fixtures.sh
+          git diff --exit-code terraform/tests/fixtures
+
+      - name: Terraform tests
+        run: terraform -chdir=terraform test
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.53.0
+
+      - name: tflint
+        run: |
+          tflint --init --chdir=terraform --config="$(pwd)/.tflint.hcl"
+          tflint --chdir=terraform --recursive --config="$(pwd)/.tflint.hcl"
