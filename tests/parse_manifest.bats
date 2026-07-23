@@ -91,3 +91,23 @@ teardown() { rm -rf "$TMP"; }
   [ "$status" -eq 0 ]
   [ "$(jq -r '.apps.gateway.containers.proxy.image' "$TMP/out/tool.dev.json")" = "nginx:1.27" ]
 }
+
+@test "partial fields default: ingress object, replicas, section defaults, static site" {
+  run "$SCRIPT" "$FIXTURES/partial.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  diff <(jq -S . "$TMP/out/tool.dev.json") <(jq -S . "$GOLDEN/partial.dev.json")
+}
+
+@test "overlay-added section gets defaults applied" {
+  run "$SCRIPT" "$FIXTURES/partial.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  diff <(jq -S . "$TMP/out/tool.prod.json") <(jq -S . "$GOLDEN/partial.prod.json")
+}
+
+@test "outputs written to both outputs.txt and GITHUB_OUTPUT when set" {
+  GITHUB_OUTPUT="$TMP/gh_output" run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^name=orders-api$' "$TMP/out/outputs.txt"
+  grep -q '^name=orders-api$' "$TMP/gh_output"
+  grep -q '^docker=false$' "$TMP/gh_output"
+}

@@ -88,3 +88,18 @@ validate() {
   run validate invalid-image-and-docker.yml
   [ "$status" -ne 0 ]
 }
+
+@test "partial manifest (shorthand, partial ingress/replicas, static site, function image) is valid" {
+  run validate partial.yml
+  [ "$status" -eq 0 ]
+}
+
+@test "function with image and docker together is invalid" {
+  run validate invalid-function-image-docker.yml
+  [ "$status" -ne 0 ]
+}
+
+@test "non-string env value is invalid" {
+  run validate invalid-env-number.yml
+  [ "$status" -ne 0 ]
+}

@@ -85,7 +85,8 @@ functions: # Azure Function Apps; map key = function app identifier
     env:
       QUEUE: jobs
 
-static_sites: {} # Azure Static Web Apps (always public in v1)
+static_sites: # Azure Static Web Apps (always public in v1)
+  docs: {}
 
 database: # section present = resource created
   type: postgres # postgres (default) | sqlserver
