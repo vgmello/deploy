@@ -265,10 +265,10 @@ Shared per tool+env: `rg-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars
 
 ## Testing
 
-- **Composite actions:** bats/shell tests for merge logic (`parse-manifest`, `resolve-config`) with golden files: manifest in → `tfvars.json` out.
+- **Composite actions:** all action logic lives in the `cloudtool/` Python package (validate/merge/normalize, build enumeration, secret sync, terraform orchestration), unit-tested with pytest — golden files for merge output, injected fake runners for az/docker/terraform flows. Actions are thin `python3 -m cloudtool <cmd>` adapters.
 - **Terraform:** `terraform validate` + `tflint` in CI; example manifests under `terraform/tests/` planned against mock platform config.
 - **Integration:** sandbox subscription, nightly or manual — deploys an example container-app manifest end-to-end, then destroys.
-- **Schema:** JSON Schema tested against valid and invalid manifest fixtures.
+- **Schema:** JSON Schema tested against valid and invalid manifest fixtures (jsonschema in pytest).
 
 ## Versioning
 
