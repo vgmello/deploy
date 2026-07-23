@@ -1,4 +1,2 @@
-app:
-  ingress: internal
-  env: {}
-  secrets: []
+env: {}
+secrets: []

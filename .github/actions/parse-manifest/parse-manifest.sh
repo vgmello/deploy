@@ -18,20 +18,23 @@ yq -o=json '.' "$MANIFEST" > "$OUT/manifest.json"
 npx --yes ajv-cli@5 validate --spec=draft2020 -s "$SCHEMA" -d "$OUT/manifest.json"
 
 NAME="$(yq '.name' "$MANIFEST")"
-TYPE="$(yq '.type' "$MANIFEST")"
 ENVS="$(yq -o=json -I=0 '(.environments // {"dev": {}}) | keys' "$MANIFEST")"
-
-DOCKER=false
-if [ "$(yq '.app.docker' "$MANIFEST")" != "null" ] || [ -f "$APP_ROOT/Dockerfile" ]; then
-  DOCKER=true
-fi
 
 yq 'del(.environments)' "$MANIFEST" > "$OUT/base.yml"
 
 for env in $(echo "$ENVS" | yq -p=json '.[]'); do
   yq ".environments.\"$env\" // {}" "$MANIFEST" > "$OUT/overlay.$env.yml"
   yq eval-all '. as $item ireduce ({}; . * $item)' \
-    "$DEFAULTS/$TYPE.yml" "$OUT/base.yml" "$OUT/overlay.$env.yml" > "$OUT/merged.$env.yml"
+    "$OUT/base.yml" "$OUT/overlay.$env.yml" > "$OUT/merged.$env.yml"
+
+  # fill per-entry defaults for functions and static sites
+  for pair in functions:function static_sites:static_site; do
+    section="${pair%%:*}"
+    deffile="${pair##*:}"
+    if [ "$(yq ".$section" "$OUT/merged.$env.yml")" != "null" ]; then
+      yq -i ".$section |= map_values(load(\"$DEFAULTS/$deffile.yml\") * .)" "$OUT/merged.$env.yml"
+    fi
+  done
 
   for section in database storage; do
     if [ "$(yq ".$section" "$OUT/merged.$env.yml")" != "null" ]; then
@@ -42,11 +45,21 @@ for env in $(echo "$ENVS" | yq -p=json '.[]'); do
     fi
   done
 
-  yq -o=json '.' "$OUT/merged.$env.yml" > "$OUT/tool.$env.json"
+  # apps: fold shorthand into containers, expand ingress, apply defaults
+  yq -o=json '.' "$OUT/merged.$env.yml" \
+    | jq -f "$ACTION_DIR/normalize.jq" > "$OUT/tool.$env.json"
 done
 
+DOCKER=false
+DOCKER_ENTRIES="$(jq -s '[ .[]
+    | ( .apps // {} | .[] | .containers // {} | .[] | .docker ),
+      ( .functions // {} | .[] | .docker )
+  ] | map(select(. != null)) | length' "$OUT"/tool.*.json)"
+if [ "$DOCKER_ENTRIES" != "0" ] || [ -f "$APP_ROOT/Dockerfile" ]; then
+  DOCKER=true
+fi
+
 OUTPUTS="name=$NAME
-type=$TYPE
 environments=$ENVS
 docker=$DOCKER"
 

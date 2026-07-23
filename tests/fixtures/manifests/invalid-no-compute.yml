@@ -1,5 +1,3 @@
 name: orders-api
-apps:
-  api: {}
-databse:
+database:
   size: small

@@ -4,18 +4,84 @@
   "title": "cloud-tool manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "type"],
+  "required": [
+    "name"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "app"
+      ]
+    },
+    {
+      "required": [
+        "apps"
+      ]
+    },
+    {
+      "required": [
+        "functions"
+      ]
+    },
+    {
+      "required": [
+        "static_sites"
+      ]
+    }
+  ],
   "properties": {
-    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,29}$" },
-    "type": { "enum": ["container-app", "function", "static-site"] },
-    "app": { "$ref": "#/$defs/app" },
-    "database": { "$ref": "#/$defs/database" },
-    "storage": { "$ref": "#/$defs/storage" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,29}$"
+    },
+    "app": {
+      "$ref": "#/$defs/app"
+    },
+    "apps": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,29}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/app"
+      }
+    },
+    "functions": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,29}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/function"
+      }
+    },
+    "static_sites": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,29}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/static_site"
+      }
+    },
+    "database": {
+      "$ref": "#/$defs/database"
+    },
+    "storage": {
+      "$ref": "#/$defs/storage"
+    },
     "environments": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": { "pattern": "^[a-z][a-z0-9]{1,15}$" },
-      "additionalProperties": { "$ref": "#/$defs/overlay" }
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]{1,15}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/overlay"
+      }
     }
   },
   "$defs": {
@@ -23,33 +89,181 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "ingress": { "enum": ["public", "internal", "none"] },
-        "cpu": { "type": "number", "exclusiveMinimum": 0 },
-        "memory": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?Gi$" },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,29}$"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "ingress": {
+          "oneOf": [
+            {
+              "enum": [
+                "public",
+                "internal",
+                "none"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ingress"
+            }
+          ]
+        },
+        "cpu": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "memory": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?Gi$"
+        },
         "replicas": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "min": { "type": "integer", "minimum": 0 },
-            "max": { "type": "integer", "minimum": 1 }
+            "min": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         },
         "docker": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "file": { "type": "string" },
-            "context": { "type": "string" }
+            "file": {
+              "type": "string"
+            },
+            "context": {
+              "type": "string"
+            }
           }
         },
         "env": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "secrets": {
           "type": "array",
-          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        },
+        "containers": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,29}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/container"
+          }
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "containers"
+            ]
+          },
+          "then": {
+            "properties": {
+              "cpu": false,
+              "memory": false,
+              "docker": false,
+              "env": false,
+              "secrets": false,
+              "image": false
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "image",
+              "docker"
+            ]
+          }
+        }
+      ]
+    },
+    "function": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,29}$"
+        },
+        "docker": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "context": {
+              "type": "string"
+            }
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "image",
+              "docker"
+            ]
+          }
+        }
+      ]
+    },
+    "static_site": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,29}$"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -57,9 +271,27 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "size": { "enum": ["small", "medium", "large"] },
-        "storage_gb": { "type": "integer", "minimum": 32, "maximum": 16384 },
-        "public_access": { "type": "boolean" }
+        "type": {
+          "enum": [
+            "postgres",
+            "sqlserver"
+          ]
+        },
+        "size": {
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ]
+        },
+        "storage_gb": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 16384
+        },
+        "public_access": {
+          "type": "boolean"
+        }
       }
     },
     "storage": {
@@ -73,17 +305,136 @@
             "pattern": "^[a-z0-9](?:[a-z0-9-]{1,61})?[a-z0-9]$"
           }
         },
-        "public_access": { "type": "boolean" }
+        "public_access": {
+          "type": "boolean"
+        }
       }
     },
     "overlay": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "app": { "$ref": "#/$defs/app" },
-        "database": { "$ref": "#/$defs/database" },
-        "storage": { "$ref": "#/$defs/storage" }
+        "app": {
+          "$ref": "#/$defs/app"
+        },
+        "apps": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/app"
+          }
+        },
+        "functions": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/function"
+          }
+        },
+        "static_sites": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/static_site"
+          }
+        },
+        "database": {
+          "$ref": "#/$defs/database"
+        },
+        "storage": {
+          "$ref": "#/$defs/storage"
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "external": {
+          "type": "boolean"
+        },
+        "target_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "exposed_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "transport": {
+          "enum": [
+            "auto",
+            "http",
+            "http2",
+            "tcp"
+          ]
+        },
+        "allow_insecure": {
+          "type": "boolean"
+        }
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cpu": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "memory": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?Gi$"
+        },
+        "docker": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "context": {
+              "type": "string"
+            }
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "image",
+              "docker"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "not": {
+        "required": [
+          "app",
+          "apps"
+        ]
       }
     }
-  }
+  ]
 }

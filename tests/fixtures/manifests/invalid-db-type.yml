@@ -1,5 +1,5 @@
 name: orders-api
 apps:
   api: {}
-databse:
-  size: small
+database:
+  type: mysql

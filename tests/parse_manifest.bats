@@ -29,18 +29,18 @@ teardown() { rm -rf "$TMP"; }
 }
 
 @test "invalid manifest fails before producing output" {
-  run "$SCRIPT" "$FIXTURES/invalid-bad-type.yml" "$TMP/out"
+  run "$SCRIPT" "$FIXTURES/invalid-legacy-type.yml" "$TMP/out"
   [ "$status" -ne 0 ]
   [ ! -f "$TMP/out/tool.dev.json" ]
 }
 
-@test "outputs file contains name, type, environments, docker" {
+@test "outputs file contains name, environments, docker (no type)" {
   run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out"
   [ "$status" -eq 0 ]
   grep -q '^name=orders-api$' "$TMP/out/outputs.txt"
-  grep -q '^type=container-app$' "$TMP/out/outputs.txt"
   grep -q '^environments=\["dev"\]$' "$TMP/out/outputs.txt"
   grep -q '^docker=false$' "$TMP/out/outputs.txt"
+  ! grep -q '^type=' "$TMP/out/outputs.txt"
 }
 
 @test "docker output true when Dockerfile exists in app root" {
@@ -51,7 +51,7 @@ teardown() { rm -rf "$TMP"; }
   grep -q '^docker=true$' "$TMP/out/outputs.txt"
 }
 
-@test "docker output true when manifest has docker section" {
+@test "docker output true when any app has docker section" {
   run "$SCRIPT" "$FIXTURES/full.yml" "$TMP/out"
   [ "$status" -eq 0 ]
   grep -q '^docker=true$' "$TMP/out/outputs.txt"
@@ -61,4 +61,53 @@ teardown() { rm -rf "$TMP"; }
   run "$SCRIPT" "$FIXTURES/full.yml" "$TMP/out"
   [ "$status" -eq 0 ]
   grep -q '^environments=\["dev","prod"\]$' "$TMP/out/outputs.txt"
+}
+
+@test "multi-container manifest with ingress object produces normalized golden" {
+  run "$SCRIPT" "$FIXTURES/multi.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  diff <(jq -S . "$TMP/out/tool.dev.json") <(jq -S . "$GOLDEN/multi.dev.json")
+}
+
+@test "docker output true when a container has docker section" {
+  run "$SCRIPT" "$FIXTURES/multi.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^docker=true$' "$TMP/out/outputs.txt"
+}
+
+@test "app shorthand folds into apps.main" {
+  run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.apps | keys | join(",")' "$TMP/out/tool.dev.json")" = "main" ]
+}
+
+@test "overlay app mixed with base apps fails" {
+  run "$SCRIPT" "$FIXTURES/invalid-overlay-app-mix.yml" "$TMP/out"
+  [ "$status" -ne 0 ]
+}
+
+@test "prebuilt image passes through to normalized container" {
+  run "$SCRIPT" "$FIXTURES/multi.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.apps.gateway.containers.proxy.image' "$TMP/out/tool.dev.json")" = "nginx:1.27" ]
+}
+
+@test "partial fields default: ingress object, replicas, section defaults, static site" {
+  run "$SCRIPT" "$FIXTURES/partial.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  diff <(jq -S . "$TMP/out/tool.dev.json") <(jq -S . "$GOLDEN/partial.dev.json")
+}
+
+@test "overlay-added section gets defaults applied" {
+  run "$SCRIPT" "$FIXTURES/partial.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  diff <(jq -S . "$TMP/out/tool.prod.json") <(jq -S . "$GOLDEN/partial.prod.json")
+}
+
+@test "outputs written to both outputs.txt and GITHUB_OUTPUT when set" {
+  GITHUB_OUTPUT="$TMP/gh_output" run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^name=orders-api$' "$TMP/out/outputs.txt"
+  grep -q '^name=orders-api$' "$TMP/gh_output"
+  grep -q '^docker=false$' "$TMP/gh_output"
 }

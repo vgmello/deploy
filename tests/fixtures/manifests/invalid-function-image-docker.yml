@@ -1,0 +1,6 @@
+name: orders-api
+functions:
+  worker:
+    image: nginx:1.27
+    docker:
+      file: ./Dockerfile

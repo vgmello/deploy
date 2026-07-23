@@ -12,7 +12,7 @@ This repo contains everything: the Terraform modules and presets, the reusable w
 
 ## Goals
 
-- Teams declare _what_ they need (app type, database, storage), never _how_ it is provisioned.
+- Teams declare _what_ they need (apps, functions, static sites, database, storage), never _how_ it is provisioned.
 - Sensible defaults for everything; every default overridable in the manifest.
 - Private networking by default; public access is an explicit opt-in.
 - Per-environment overrides in the manifest; environments defined by the manifest itself.
@@ -21,8 +21,8 @@ This repo contains everything: the Terraform modules and presets, the reusable w
 
 ## Non-goals (v1)
 
-- Multiple tools per manifest / monorepo support (schema is a flat single-tool object; may extend later).
-- Azure SQL, Cosmos DB (Postgres only).
+- Multiple manifests per repo / monorepo support (one manifest per repo; the manifest itself can declare multiple apps/functions).
+- Cosmos DB (databases are Postgres or SQL Server only).
 - Redis, Service Bus.
 - Postgres AAD auth (v1 uses connection strings in Key Vault).
 - Private networking for Static Web Apps (no real private-link story; always public, documented).
@@ -30,34 +30,66 @@ This repo contains everything: the Terraform modules and presets, the reusable w
 
 ## Manifest schema (`.cloud-tool.yml`)
 
-Lives at the root of the app repo. Path overridable via workflow input. Only `name` and `type` are required.
+Lives at the root of the app repo. Path overridable via workflow input. `name` plus at least one compute section (`apps`, `functions`, or `static_sites`) required. There is no `type` field — sections define what gets created.
 
 ```yaml
-# minimal — everything defaulted
+# minimal — everything defaulted; singular shorthand for one-app repos
 name: orders-api
-type: container-app # container-app | function | static-site
+app: {}
+```
+
+```yaml
+# prebuilt image instead of a docker build
+name: orders-api
+app:
+  image: myacr.azurecr.io/orders-api:1.4.2
 ```
 
 ```yaml
 # fuller example
 name: orders-api
-type: container-app
 
-app:
-  port: 8080 # default 8080
-  ingress: internal # public | internal | none — default internal; none = worker
-  cpu: 0.5 # defaults per preset
-  memory: 1Gi
-  replicas: { min: 1, max: 3 }
-  docker:
-    file: ./Dockerfile # presence of Dockerfile auto-enables build
-    context: .
-  env: # plain vars, applied to all envs
-    LOG_LEVEL: info
-  secrets: # names only; values come from GHA env secrets → Key Vault
-    - STRIPE_KEY
+apps: # Azure Container Apps; map key = app identifier
+  api:
+    port: 8080 # default 8080; shorthand for ingress.target_port
+    ingress: internal # public | internal | none — default internal; none = worker
+    cpu: 0.5 # single-container shorthand (folds into containers.main)
+    memory: 1Gi
+    replicas: { min: 1, max: 3 }
+    docker:
+      file: ./Dockerfile # docker section or root Dockerfile auto-enables build
+      context: .
+    env: # plain vars, applied to all envs
+      LOG_LEVEL: info
+    secrets: # names only; values come from GHA env secrets → Key Vault
+      - STRIPE_KEY
+  worker:
+    ingress: none # worker = container app without ingress
+  gateway:
+    ingress: # object form mirrors the Terraform ingress block
+      external: true
+      target_port: 3000
+      exposed_port: 3000
+      transport: http2 # auto | http | http2 | tcp
+      allow_insecure: false
+    containers: # multi-container form, mirrors Terraform template.container
+      web:
+        docker: { file: ./web/Dockerfile }
+      proxy:
+        cpu: 0.25
+        memory: 0.5Gi
+        env: { MODE: sidecar }
+
+functions: # Azure Function Apps; map key = function app identifier
+  processor:
+    env:
+      QUEUE: jobs
+
+static_sites: # Azure Static Web Apps (always public in v1)
+  docs: {}
 
 database: # section present = resource created
+  type: postgres # postgres (default) | sqlserver
   size: small # t-shirt size → SKU map (small | medium | large), default small
   storage_gb: 32
   public_access: false # default false everywhere
@@ -69,16 +101,24 @@ storage: # blob storage account
 environments: # keys define which envs exist; values deep-merge over the above
   dev: {}
   prod:
-    app:
-      replicas: { min: 2, max: 10 }
-      env: { LOG_LEVEL: warn }
+    apps:
+      api:
+        replicas: { min: 2, max: 10 }
+        env: { LOG_LEVEL: warn }
     database:
       size: medium
 ```
 
 Rules:
 
-- `name` + `type` are the only required fields.
+- `name` is required, plus at least one compute section: `app`, `apps`, `functions`, or `static_sites` (maps non-empty when present).
+- `app:` is singular shorthand for one-app repos — folded into `apps.main` at parse time. `app` + `apps` together is a schema error (also caught post-merge when an overlay mixes forms).
+- Each container (or shorthand) declares either `docker:` (built and pushed by the workflow) or `image:` (prebuilt reference deployed as-is) — never both.
+- Compute sections are maps, not lists — env overlays deep-merge per entry key.
+- All entries share one resource group and one Key Vault per env; apps deploy into the platform's shared Container Apps environment (ID from platform config).
+- Apps: `containers:` map mirrors Terraform's `template.container` list. App-level `cpu`/`memory`/`docker`/`env`/`secrets` are single-container shorthand; mixing shorthand with `containers:` is a schema error. `parse-manifest` normalizes both forms so `tool.<env>.json` always has an explicit `containers` map (shorthand becomes `containers.main`).
+- `ingress` accepts the string shorthand (`public`/`internal`/`none`) or an object mirroring the Terraform ingress block (`external`, `target_port`, `exposed_port`, `transport`, `allow_insecure`). Normalized output is always the object form (or omitted for `none`); `port` fills `target_port` when the object doesn't set it.
+- Each entry takes an optional `name:` override for its Azure base name (see Naming).
 - A resource section absent = resource not created. Exception: Key Vault is always created.
 - `environments:` keys define which environments exist. Each key must have a matching platform config file in this repo (`environments/<env>.yml`); missing file is a hard failure.
 - Everything is private by default. Opt out with `public_access: true` or `ingress: public`.
@@ -92,9 +132,9 @@ Chosen approach: **single Terraform root module + translation layer** (over per-
 
 Composite actions parse and deep-merge configuration in this order (later wins):
 
-1. Preset defaults
-2. Tool config (manifest top level)
-3. Environment overlay (manifest `environments.<env>`)
+1. Tool config (manifest top level)
+2. Environment overlay (manifest `environments.<env>`)
+3. Per-entry defaults + normalization (`functions`/`static_sites` entries filled from defaults files; `database`/`storage` section defaults; apps normalized via `normalize.jq` — shorthand → `containers.main`, ingress string → object, container/replica defaults)
 4. Platform environment config (`environments/<env>.yml` in this repo)
 
 The result is a single `tfvars.json` consumed by one static Terraform root module. The merge logic lives in composite actions (testable shell/yq), and Terraform stays static and reviewable.
@@ -150,9 +190,11 @@ app repo push→main ──► deploy.yml (reusable)
 
 jobs:
   setup                 parse manifest, validate vs JSON Schema,
-                        outputs: envs[], type, docker?, tool name
+                        outputs: envs[], docker?, tool name
   build  (if docker)    docker-build action → push ACR, tag = git sha
-                        runs ONCE; image promoted across envs, never rebuilt
+                        one image per docker: container, built ONCE;
+                        images promoted across envs, never rebuilt.
+                        image: containers skip build, deployed as-is
   deploy-<env>          one job per env in manifest key order, chained
                         (e.g. dev → staging → prod). Each:
                           environment: <env>     ← GHA approval gate lives here
@@ -174,17 +216,17 @@ jobs:
 **Root module:**
 
 - Input is the single merged `tfvars.json`. Variable `config` typed `any`; locals normalize with `try()` defaults. Schema validation already happened in GHA.
-- Per tool+env: one resource group `rg-<name>-<env>`.
-- Preset selection via `count`-guarded module blocks (`container-app` / `function` / `static-site`).
-- Shared modules are composed by the root, not by presets: keyvault (always), postgres (if `database`), storage (if `storage`). Presets receive resolved references only (Key Vault id, secret names).
+- Per tool+env: one resource group `rg-<name>-<env>` shared by all entries.
+- Compute modules instantiated with `for_each` over the `apps` / `functions` / `static_sites` maps (`container-app` / `function` / `static-site` modules).
+- Shared modules are composed by the root, not by compute modules: keyvault (always), database (if `database` — Postgres Flexible Server or Azure SQL per `database.type`), storage (if `storage`). Compute modules receive resolved references only (Key Vault id, secret names, Container Apps environment ID from platform config).
 
 **Networking** (all IDs from platform env config):
 
 - No VNets created. Everything attaches to the landing-zone spoke: subnet IDs for the Container Apps environment, private endpoints, and Functions VNet integration.
 - `private-endpoint` shared module wires PE + private DNS zone group per resource: postgres, blob, Key Vault, and the app itself when `ingress: internal`.
-- Postgres: private access; platform config chooses delegated subnet vs PE per landing-zone convention (default PE); `public_network_access = false` unless `public_access: true`.
+- Database (Postgres or SQL Server): private access; platform config chooses delegated subnet vs PE per landing-zone convention (default PE); `public_network_access = false` unless `public_access: true`. Private DNS zone per engine in platform config (`private_dns_zone_ids.postgres` / `.sqlserver`).
 - Storage / Key Vault: `public_network_access = false` + PE. Deploy-time access from GHA runners controlled by platform config flag `runner_access: private | public-allowlist` — self-hosted runners inside the VNet for fully private; fallback temporarily allowlists the runner IP during apply.
-- Container Apps: one managed environment per tool+env (workload profiles, VNet-integrated, internal by default). `ingress: public` = external ingress; `ingress: none` = no ingress block (worker).
+- Container Apps: the managed environment is platform-level infrastructure, shared by all tools in an env (workload profiles, VNet-integrated, internal by default); its ID lives in platform config (`container_apps_environment_id`). `ingress: public` / `external: true` = external ingress; `ingress: none` = no ingress block (worker).
 - Static Web Apps: always public frontend in v1; documented limitation.
 
 **State:** `azurerm` backend, storage account from platform config, key `<name>/<env>.tfstate`, locking via blob lease.
@@ -193,7 +235,7 @@ jobs:
 
 **Identity:**
 
-- Each app gets a user-assigned managed identity `id-<name>-<env>`.
+- Each compute entry gets a user-assigned managed identity `id-<base>-<env>` (base per Naming below).
 - Grants: Key Vault secrets get/list (RBAC), ACR pull, storage blob contributor (if storage). Postgres AAD auth deferred; v1 uses a connection string in Key Vault.
 - Deploy-time SP (OIDC): contributor on app resource groups, network-join on landing-zone subnets, Key Vault secrets-officer (for sync-secrets). Defined per env in platform config.
 
@@ -203,11 +245,13 @@ jobs:
 2. Team adds `STRIPE_KEY` to the app repo's GHA environment secrets.
 3. `sync-secrets` writes Key Vault secret `STRIPE_KEY` (idempotent; only writes when the value changed).
 4. Terraform wires app env var `STRIPE_KEY` → Key Vault reference (Container Apps secret ref / Functions Key Vault reference). The app sees a plain env var.
-5. Platform-generated secrets (postgres connection string, storage connection string) are auto-created in Key Vault and auto-wired as `DATABASE_URL` and `STORAGE_CONNECTION` env vars. These names are reserved and documented.
+5. Platform-generated secrets (database connection string, storage connection string) are auto-created in Key Vault and auto-wired as `DATABASE_URL` and `STORAGE_CONNECTION` env vars regardless of engine. These names are reserved and documented.
 
 **Naming** (fixed convention; prefix from platform config):
 
-`rg-<name>-<env>`, `ca-<name>-<env>`, `func-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars), `psql-<name>-<env>`, `st<name><env>` (alphanumeric only, truncated to 24), `id-<name>-<env>`, `cae-<name>-<env>`. Truncation collision risk is checked in `parse-manifest`, which warns on collision.
+Per-entry base name: `<manifest-name>-<entry-key>`, deduped to `<manifest-name>` when the section has exactly one entry; an explicit `name:` on the entry overrides the base entirely. Azure resources add the type prefix: `ca-<base>-<env>` (container app), `func-<base>-<env>` (function app), `swa-<base>-<env>` (static site), `id-<base>-<env>` (identity).
+
+Shared per tool+env: `rg-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars), `psql-<name>-<env>` (postgres) / `sql-<name>-<env>` (sqlserver), `st<name><env>` (alphanumeric only, truncated to 24). The Container Apps environment is platform-owned (not per tool); its ID comes from platform config. Truncation collision risk is checked in `parse-manifest`, which warns on collision.
 
 ## Error handling
 

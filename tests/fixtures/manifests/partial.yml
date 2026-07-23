@@ -1,0 +1,17 @@
+name: partial
+app:
+  port: 5000
+  ingress: { transport: http2 }
+  replicas: { min: 2 }
+database:
+  size: large
+functions:
+  relay:
+    image: myacr.azurecr.io/relay:2.0
+static_sites:
+  docs: {}
+environments:
+  dev: {}
+  prod:
+    storage:
+      containers: [logs]

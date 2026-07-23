@@ -1,13 +1,25 @@
 {
   "name": "orders-api",
-  "type": "container-app",
-  "app": {
-    "port": 8080,
-    "ingress": "internal",
-    "cpu": 0.5,
-    "memory": "1Gi",
-    "replicas": { "min": 1, "max": 3 },
-    "env": {},
-    "secrets": []
+  "apps": {
+    "main": {
+      "ingress": {
+        "external": false,
+        "target_port": 8080,
+        "transport": "auto",
+        "allow_insecure": false
+      },
+      "replicas": {
+        "min": 1,
+        "max": 3
+      },
+      "containers": {
+        "main": {
+          "cpu": 0.5,
+          "memory": "1Gi",
+          "env": {},
+          "secrets": []
+        }
+      }
+    }
   }
 }
