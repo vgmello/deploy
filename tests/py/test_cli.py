@@ -1,0 +1,95 @@
+import json
+
+from cloudtool import cli
+from conftest import ENVDIR, FIXTURES
+
+
+def read_kv(text):
+    return dict(line.split("=", 1) for line in text.splitlines())
+
+
+def test_parse_manifest_writes_tools_and_outputs(tmp_path, monkeypatch):
+    gh = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
+    out = tmp_path / "cloud-tool"
+    rc = cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "full.yml"),
+        "--output-dir", str(out), "--app-root", str(tmp_path),
+    ])
+    assert rc == 0
+    assert (out / "tool.dev.json").exists()
+    assert (out / "tool.prod.json").exists()
+
+    # outputs.txt and GITHUB_OUTPUT carry identical key=value lines
+    file_out = read_kv((out / "outputs.txt").read_text())
+    gh_out = read_kv(gh.read_text())
+    assert file_out == gh_out
+    assert file_out["name"] == "orders-api"
+    assert file_out["environments"] == '["dev","prod"]'
+    assert file_out["docker"] == "true"
+    assert "type" not in file_out
+
+
+def test_parse_manifest_docker_false_without_dockerfile(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    out = tmp_path / "ct"
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "minimal.yml"),
+        "--output-dir", str(out), "--app-root", str(tmp_path),
+    ])
+    assert read_kv((out / "outputs.txt").read_text())["docker"] == "false"
+
+
+def test_parse_manifest_cleans_stale_outputs(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    out = tmp_path / "ct"
+    out.mkdir()
+    (out / "tool.stale.json").write_text("{}")
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "minimal.yml"),
+        "--output-dir", str(out), "--app-root", str(tmp_path),
+    ])
+    assert not (out / "tool.stale.json").exists()
+    assert (out / "tool.dev.json").exists()
+
+
+def test_invalid_manifest_returns_nonzero_and_writes_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    out = tmp_path / "ct"
+    rc = cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "invalid-legacy-type.yml"),
+        "--output-dir", str(out), "--app-root", str(tmp_path),
+    ])
+    assert rc == 1
+    assert "::error::" in capsys.readouterr().out
+    assert not (out / "tool.dev.json").exists()
+
+
+def test_resolve_config_writes_tfvars(tmp_path):
+    tools = tmp_path / "tool.dev.json"
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "minimal.yml"),
+        "--output-dir", str(tmp_path),
+    ])
+    out = tmp_path / "tfvars.json"
+    rc = cli.main([
+        "resolve-config", "--tool-json", str(tools),
+        "--platform-file", str(ENVDIR / "dev.yml"),
+        "--environment", "dev", "--out-file", str(out),
+    ])
+    assert rc == 0
+    assert json.loads(out.read_text())["config"]["environment"] == "dev"
+
+
+def test_resolve_config_missing_platform_returns_nonzero(tmp_path, capsys):
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "minimal.yml"),
+        "--output-dir", str(tmp_path),
+    ])
+    rc = cli.main([
+        "resolve-config", "--tool-json", str(tmp_path / "tool.dev.json"),
+        "--platform-file", str(ENVDIR / "nope.yml"),
+        "--environment", "nope", "--out-file", str(tmp_path / "o.json"),
+    ])
+    assert rc == 1
+    assert "platform config not found" in capsys.readouterr().out

@@ -1,11 +1,5 @@
 {
   "config": {
-    "database": {
-      "type": "sqlserver",
-      "size": "medium",
-      "storage_gb": 32,
-      "public_access": false
-    },
     "name": "billing",
     "apps": {
       "gateway": {
@@ -40,6 +34,12 @@
           }
         }
       }
+    },
+    "database": {
+      "type": "sqlserver",
+      "size": "medium",
+      "storage_gb": 32,
+      "public_access": false
     },
     "environment": "dev",
     "platform": {

@@ -2,3 +2,6 @@
 *.tfstate
 *.tfstate.*
 crash.log
+
+__pycache__/
+.pytest_cache/
