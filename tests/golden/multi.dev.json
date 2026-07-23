@@ -2,23 +2,41 @@
   "name": "billing",
   "apps": {
     "gateway": {
-      "ingress": { "external": true, "target_port": 3000, "transport": "http2", "allow_insecure": false },
-      "replicas": { "min": 1, "max": 3 },
+      "ingress": {
+        "external": true,
+        "target_port": 3000,
+        "transport": "http2",
+        "allow_insecure": false
+      },
+      "replicas": {
+        "min": 1,
+        "max": 3
+      },
       "containers": {
         "web": {
           "cpu": 0.5,
           "memory": "1Gi",
-          "docker": { "file": "./web/Dockerfile" },
+          "docker": {
+            "file": "./web/Dockerfile"
+          },
           "env": {},
           "secrets": []
         },
         "proxy": {
           "cpu": 0.25,
           "memory": "0.5Gi",
-          "env": { "MODE": "sidecar" },
+          "env": {
+            "MODE": "sidecar"
+          },
           "secrets": []
         }
       }
     }
+  },
+  "database": {
+    "type": "sqlserver",
+    "size": "medium",
+    "storage_gb": 32,
+    "public_access": false
   }
 }

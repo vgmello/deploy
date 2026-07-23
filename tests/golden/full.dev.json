@@ -2,31 +2,66 @@
   "name": "orders-api",
   "apps": {
     "api": {
-      "ingress": { "external": false, "target_port": 8080, "transport": "auto", "allow_insecure": false },
-      "replicas": { "min": 1, "max": 3 },
+      "ingress": {
+        "external": false,
+        "target_port": 8080,
+        "transport": "auto",
+        "allow_insecure": false
+      },
+      "replicas": {
+        "min": 1,
+        "max": 3
+      },
       "containers": {
         "main": {
           "cpu": 0.5,
           "memory": "1Gi",
-          "docker": { "file": "./Dockerfile", "context": "." },
-          "env": { "LOG_LEVEL": "info" },
-          "secrets": ["STRIPE_KEY"]
+          "docker": {
+            "file": "./Dockerfile",
+            "context": "."
+          },
+          "env": {
+            "LOG_LEVEL": "info"
+          },
+          "secrets": [
+            "STRIPE_KEY"
+          ]
         }
       }
     },
     "worker": {
-      "replicas": { "min": 1, "max": 3 },
+      "replicas": {
+        "min": 1,
+        "max": 3
+      },
       "containers": {
-        "main": { "cpu": 0.5, "memory": "1Gi", "env": {}, "secrets": [] }
+        "main": {
+          "cpu": 0.5,
+          "memory": "1Gi",
+          "env": {},
+          "secrets": []
+        }
       }
     }
   },
   "functions": {
     "processor": {
-      "env": { "QUEUE": "jobs" },
+      "env": {
+        "QUEUE": "jobs"
+      },
       "secrets": []
     }
   },
-  "database": { "size": "small", "storage_gb": 32, "public_access": false },
-  "storage": { "containers": ["uploads"], "public_access": false }
+  "database": {
+    "type": "postgres",
+    "size": "small",
+    "storage_gb": 32,
+    "public_access": false
+  },
+  "storage": {
+    "containers": [
+      "uploads"
+    ],
+    "public_access": false
+  }
 }

@@ -1,0 +1,5 @@
+name: orders-api
+apps:
+  api: {}
+database:
+  type: mysql

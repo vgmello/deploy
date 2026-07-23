@@ -58,3 +58,13 @@ validate() {
   run validate invalid-mixed-container.yml
   [ "$status" -ne 0 ]
 }
+
+@test "database type sqlserver is valid" {
+  run validate multi.yml
+  [ "$status" -eq 0 ]
+}
+
+@test "unknown database type is invalid" {
+  run validate invalid-db-type.yml
+  [ "$status" -ne 0 ]
+}

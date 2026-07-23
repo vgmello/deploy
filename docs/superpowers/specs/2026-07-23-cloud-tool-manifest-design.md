@@ -22,7 +22,7 @@ This repo contains everything: the Terraform modules and presets, the reusable w
 ## Non-goals (v1)
 
 - Multiple manifests per repo / monorepo support (one manifest per repo; the manifest itself can declare multiple apps/functions).
-- Azure SQL, Cosmos DB (Postgres only).
+- Cosmos DB (databases are Postgres or SQL Server only).
 - Redis, Service Bus.
 - Postgres AAD auth (v1 uses connection strings in Key Vault).
 - Private networking for Static Web Apps (no real private-link story; always public, documented).
@@ -82,6 +82,7 @@ functions: # Azure Function Apps; map key = function app identifier
 static_sites: {} # Azure Static Web Apps (always public in v1)
 
 database: # section present = resource created
+  type: postgres # postgres (default) | sqlserver
   size: small # t-shirt size → SKU map (small | medium | large), default small
   storage_gb: 32
   public_access: false # default false everywhere
@@ -207,13 +208,13 @@ jobs:
 - Input is the single merged `tfvars.json`. Variable `config` typed `any`; locals normalize with `try()` defaults. Schema validation already happened in GHA.
 - Per tool+env: one resource group `rg-<name>-<env>` shared by all entries.
 - Compute modules instantiated with `for_each` over the `apps` / `functions` / `static_sites` maps (`container-app` / `function` / `static-site` modules).
-- Shared modules are composed by the root, not by compute modules: keyvault (always), postgres (if `database`), storage (if `storage`). Compute modules receive resolved references only (Key Vault id, secret names, Container Apps environment ID from platform config).
+- Shared modules are composed by the root, not by compute modules: keyvault (always), database (if `database` — Postgres Flexible Server or Azure SQL per `database.type`), storage (if `storage`). Compute modules receive resolved references only (Key Vault id, secret names, Container Apps environment ID from platform config).
 
 **Networking** (all IDs from platform env config):
 
 - No VNets created. Everything attaches to the landing-zone spoke: subnet IDs for the Container Apps environment, private endpoints, and Functions VNet integration.
 - `private-endpoint` shared module wires PE + private DNS zone group per resource: postgres, blob, Key Vault, and the app itself when `ingress: internal`.
-- Postgres: private access; platform config chooses delegated subnet vs PE per landing-zone convention (default PE); `public_network_access = false` unless `public_access: true`.
+- Database (Postgres or SQL Server): private access; platform config chooses delegated subnet vs PE per landing-zone convention (default PE); `public_network_access = false` unless `public_access: true`. Private DNS zone per engine in platform config (`private_dns_zone_ids.postgres` / `.sqlserver`).
 - Storage / Key Vault: `public_network_access = false` + PE. Deploy-time access from GHA runners controlled by platform config flag `runner_access: private | public-allowlist` — self-hosted runners inside the VNet for fully private; fallback temporarily allowlists the runner IP during apply.
 - Container Apps: the managed environment is platform-level infrastructure, shared by all tools in an env (workload profiles, VNet-integrated, internal by default); its ID lives in platform config (`container_apps_environment_id`). `ingress: public` / `external: true` = external ingress; `ingress: none` = no ingress block (worker).
 - Static Web Apps: always public frontend in v1; documented limitation.
@@ -234,13 +235,13 @@ jobs:
 2. Team adds `STRIPE_KEY` to the app repo's GHA environment secrets.
 3. `sync-secrets` writes Key Vault secret `STRIPE_KEY` (idempotent; only writes when the value changed).
 4. Terraform wires app env var `STRIPE_KEY` → Key Vault reference (Container Apps secret ref / Functions Key Vault reference). The app sees a plain env var.
-5. Platform-generated secrets (postgres connection string, storage connection string) are auto-created in Key Vault and auto-wired as `DATABASE_URL` and `STORAGE_CONNECTION` env vars. These names are reserved and documented.
+5. Platform-generated secrets (database connection string, storage connection string) are auto-created in Key Vault and auto-wired as `DATABASE_URL` and `STORAGE_CONNECTION` env vars regardless of engine. These names are reserved and documented.
 
 **Naming** (fixed convention; prefix from platform config):
 
 Per-entry base name: `<manifest-name>-<entry-key>`, deduped to `<manifest-name>` when the section has exactly one entry; an explicit `name:` on the entry overrides the base entirely. Azure resources add the type prefix: `ca-<base>-<env>` (container app), `func-<base>-<env>` (function app), `swa-<base>-<env>` (static site), `id-<base>-<env>` (identity).
 
-Shared per tool+env: `rg-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars), `psql-<name>-<env>`, `st<name><env>` (alphanumeric only, truncated to 24). The Container Apps environment is platform-owned (not per tool); its ID comes from platform config. Truncation collision risk is checked in `parse-manifest`, which warns on collision.
+Shared per tool+env: `rg-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars), `psql-<name>-<env>` (postgres) / `sql-<name>-<env>` (sqlserver), `st<name><env>` (alphanumeric only, truncated to 24). The Container Apps environment is platform-owned (not per tool); its ID comes from platform config. Truncation collision risk is checked in `parse-manifest`, which warns on collision.
 
 ## Error handling
 

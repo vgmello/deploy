@@ -236,6 +236,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "enum": [
+            "postgres",
+            "sqlserver"
+          ]
+        },
         "size": {
           "enum": [
             "small",
