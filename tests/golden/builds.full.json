@@ -1,0 +1,18 @@
+{
+  "builds": [
+    {
+      "context": ".",
+      "file": "./Dockerfile",
+      "keys": [
+        "api/main",
+        "processor",
+        "worker/main"
+      ]
+    }
+  ],
+  "tags": {
+    "api/main": "acr.example.io/orders-api/api-main:shaabc",
+    "processor": "acr.example.io/orders-api/processor:shaabc",
+    "worker/main": "acr.example.io/orders-api/worker-main:shaabc"
+  }
+}

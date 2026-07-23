@@ -1,0 +1,52 @@
+name: docker-build
+description: Build and push one image per unique (dockerfile, context) and emit the image_tags map Terraform consumes
+inputs:
+  tool-json:
+    description: Path to a tool.<env>.json (docker config must not vary per env)
+    required: true
+  tool-name:
+    description: Tool name
+    required: true
+  registry:
+    description: ACR login server
+    required: true
+  git-sha:
+    description: Image tag (git sha)
+    required: true
+outputs:
+  image-tags:
+    description: JSON map <key> -> full image reference
+    value: ${{ steps.enumerate.outputs.tags }}
+runs:
+  using: composite
+  steps:
+    - id: enumerate
+      shell: bash
+      run: |
+        PLAN="$("${{ github.action_path }}/enumerate-builds.sh" \
+          "${{ inputs.tool-json }}" "${{ inputs.tool-name }}" \
+          "${{ inputs.registry }}" "${{ inputs.git-sha }}")"
+        echo "plan=$(echo "$PLAN" | jq -c .)" >> "$GITHUB_OUTPUT"
+        echo "tags=$(echo "$PLAN" | jq -c .tags)" >> "$GITHUB_OUTPUT"
+
+    - shell: bash
+      run: az acr login --name "$(echo "${{ inputs.registry }}" | cut -d. -f1)"
+
+    - shell: bash
+      run: |
+        PLAN='${{ steps.enumerate.outputs.plan }}'
+        TAGS='${{ steps.enumerate.outputs.tags }}'
+        echo "$PLAN" | jq -c '.builds[]' | while read -r build; do
+          file=$(echo "$build" | jq -r .file)
+          context=$(echo "$build" | jq -r .context)
+          first_key=$(echo "$build" | jq -r '.keys[0]')
+          first_ref=$(echo "$TAGS" | jq -r --arg k "$first_key" '.[$k]')
+          docker build -f "$file" -t "$first_ref" "$context"
+          echo "$build" | jq -r '.keys[1:][]' | while read -r key; do
+            ref=$(echo "$TAGS" | jq -r --arg k "$key" '.[$k]')
+            docker tag "$first_ref" "$ref"
+          done
+          echo "$build" | jq -r '.keys[]' | while read -r key; do
+            docker push "$(echo "$TAGS" | jq -r --arg k "$key" '.[$k]')"
+          done
+        done

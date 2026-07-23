@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "context": ".",
+      "file": "./web/Dockerfile",
+      "keys": [
+        "gateway/web"
+      ]
+    }
+  ],
+  "tags": {
+    "gateway/web": "acr.example.io/billing/gateway-web:shaabc"
+  }
+}

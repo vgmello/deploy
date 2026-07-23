@@ -1,0 +1,60 @@
+name: sync-secrets
+description: Push GHA environment secrets listed in the manifest into the tool's Key Vault (idempotent; tolerates a not-yet-created vault)
+inputs:
+  tool-json:
+    description: Path to tool.<env>.json
+    required: true
+  keyvault-name:
+    description: Target Key Vault name
+    required: true
+outputs:
+  vault-exists:
+    description: "true when the vault exists and secrets were synced"
+    value: ${{ steps.sync.outputs.vault-exists }}
+  secret-count:
+    description: Number of manifest secrets
+    value: ${{ steps.sync.outputs.secret-count }}
+runs:
+  using: composite
+  steps:
+    - id: sync
+      shell: bash
+      run: |
+        set -euo pipefail
+        SECRETS_JSON="$("${{ github.action_path }}/collect-secrets.sh" "${{ inputs.tool-json }}")"
+        COUNT=$(echo "$SECRETS_JSON" | jq 'length')
+        echo "secret-count=$COUNT" >> "$GITHUB_OUTPUT"
+
+        if [ "$COUNT" -eq 0 ]; then
+          echo "vault-exists=true" >> "$GITHUB_OUTPUT"
+          echo "no manifest secrets to sync"
+          exit 0
+        fi
+
+        : "${ALL_SECRETS:?ALL_SECRETS env must carry toJSON(secrets)}"
+        MISSING=$(echo "$SECRETS_JSON" | jq -r --argjson all "$(echo "$ALL_SECRETS" | jq 'keys')" \
+          '[.[] | select(.name as $n | $all | index($n) | not) | .name] | join(", ")')
+        if [ -n "$MISSING" ]; then
+          echo "::error::missing GitHub environment secrets: $MISSING"
+          exit 1
+        fi
+
+        if ! az keyvault show --name "${{ inputs.keyvault-name }}" > /dev/null 2>&1; then
+          echo "vault-exists=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::key vault ${{ inputs.keyvault-name }} not created yet; deferring secret sync"
+          exit 0
+        fi
+        echo "vault-exists=true" >> "$GITHUB_OUTPUT"
+
+        echo "$SECRETS_JSON" | jq -c '.[]' | while read -r entry; do
+          NAME=$(echo "$entry" | jq -r .name)
+          KV_NAME=$(echo "$entry" | jq -r .kv_name)
+          VALUE=$(echo "$ALL_SECRETS" | jq -r --arg n "$NAME" '.[$n]')
+          CURRENT=$(az keyvault secret show --vault-name "${{ inputs.keyvault-name }}" --name "$KV_NAME" --query value -o tsv 2>/dev/null || true)
+          if [ "$CURRENT" != "$VALUE" ]; then
+            az keyvault secret set --vault-name "${{ inputs.keyvault-name }}" --name "$KV_NAME" --value "$VALUE" --output none
+            echo "synced $KV_NAME"
+          else
+            echo "$KV_NAME unchanged"
+          fi
+        done

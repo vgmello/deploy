@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "context": ".",
+      "file": "./Dockerfile",
+      "keys": [
+        "main/main"
+      ]
+    }
+  ],
+  "tags": {
+    "main/main": "acr.example.io/partial/main-main:shaabc"
+  }
+}
