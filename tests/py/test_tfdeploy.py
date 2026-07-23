@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from cloudtool import manifest, tfdeploy
+from cloudapp import manifest, tfdeploy
 from conftest import ENVDIR, FIXTURES, FakeResult, FakeRunner
 
 

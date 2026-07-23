@@ -46,7 +46,7 @@ runs:
         TARGETS: ${{ inputs.targets }}
       run: >-
         PYTHONPATH="${{ github.action_path }}/../../.."
-        python3 -m cloudtool terraform-deploy
+        python3 -m cloudapp terraform-deploy
         --terraform-dir "${{ inputs.terraform-dir }}"
         --tfvars-file "${{ inputs.tfvars-file }}"
         --tool-json "${{ inputs.tool-json }}"

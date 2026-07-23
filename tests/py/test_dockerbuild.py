@@ -1,4 +1,4 @@
-from cloudtool import builds, dockerbuild, manifest
+from cloudapp import builds, dockerbuild, manifest
 from conftest import FIXTURES, FakeRunner
 
 

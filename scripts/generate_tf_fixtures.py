@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))
 
-from cloudtool import manifest, resolve  # noqa: E402
+from cloudapp import manifest, resolve  # noqa: E402
 
 PLATFORM = ROOT / "tests" / "fixtures" / "environments" / "dev.yml"
 OUT = ROOT / "terraform" / "tests" / "fixtures"

@@ -1,6 +1,6 @@
 import json
 
-from cloudtool import cli
+from cloudapp import cli
 from conftest import ENVDIR, FIXTURES
 
 
@@ -11,7 +11,7 @@ def read_kv(text):
 def test_parse_manifest_writes_tools_and_outputs(tmp_path, monkeypatch):
     gh = tmp_path / "gh_output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
-    out = tmp_path / "cloud-tool"
+    out = tmp_path / "cloud-app"
     rc = cli.main([
         "parse-manifest", "--manifest", str(FIXTURES / "full.yml"),
         "--output-dir", str(out), "--app-root", str(tmp_path),
@@ -110,7 +110,7 @@ def test_enumerate_builds_prints_plan(tmp_path, capsys):
 
 
 def test_docker_build_command_builds_and_writes_image_tags(tmp_path, monkeypatch):
-    from cloudtool import runner
+    from cloudapp import runner
     calls = []
     monkeypatch.setattr(runner, "run", lambda *a, **k: calls.append(a[0]))
     gh = tmp_path / "gh"
@@ -129,7 +129,7 @@ def test_docker_build_command_builds_and_writes_image_tags(tmp_path, monkeypatch
 
 
 def test_sync_secrets_command_no_secrets(tmp_path, monkeypatch):
-    from cloudtool import runner
+    from cloudapp import runner
     monkeypatch.setattr(runner, "run", lambda *a, **k: None)
     monkeypatch.setenv("ALL_SECRETS", "{}")
     gh = tmp_path / "gh"

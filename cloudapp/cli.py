@@ -80,7 +80,7 @@ def cmd_terraform_deploy(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="cloudtool")
+    parser = argparse.ArgumentParser(prog="cloudapp")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("parse-manifest")

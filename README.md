@@ -1,7 +1,7 @@
 # deploy
 
 A deployment platform that lets teams ship Azure resources through Terraform
-without writing any. Describe an app in a small `.cloud-tool.yml` manifest at
+without writing any. Describe an app in a small `.cloud-app.yml` manifest at
 the root of its repo; a reusable GitHub Actions workflow translates the
 manifest into Terraform and deploys it. Behind the scenes each tool gets a
 full stack — Container Apps / Functions / Static Web Apps, Key Vault, optional
@@ -12,7 +12,7 @@ database and blob storage — wired together over private networking by default.
 Two files in your repo:
 
 ```yaml
-# .cloud-tool.yml
+# .cloud-app.yml
 name: orders-api
 app:
   port: 8080
@@ -47,9 +47,9 @@ Full manifest reference and onboarding steps: [docs/usage.md](docs/usage.md).
 
 | Path                                      | What                                                                                                                                          |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `terraform/schema/cloud-tool.schema.json` | Manifest JSON Schema                                                                                                                          |
-| `cloudtool/`                              | Python package with all action logic (validate, merge, normalize, build, secrets, deploy)                                                     |
-| `.github/actions/`                        | Composite actions — thin `python3 -m cloudtool` adapters                                                                                      |
+| `terraform/schema/cloud-app.schema.json` | Manifest JSON Schema                                                                                                                          |
+| `cloudapp/`                              | Python package with all action logic (validate, merge, normalize, build, secrets, deploy)                                                     |
+| `.github/actions/`                        | Composite actions — thin `python3 -m cloudapp` adapters                                                                                      |
 | `.github/workflows/deploy.yml`            | Reusable deploy workflow (`workflow_call`)                                                                                                    |
 | `terraform/`                              | Root module + compute (`container-app`, `function`, `static-site`) and shared (`keyvault`, `database`, `storage`, `private-endpoint`) modules |
 | `environments/`                           | Per-environment platform config (subscription, VNet, DNS zones, ACR, state, deploy SP)                                                        |

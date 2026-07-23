@@ -1,6 +1,6 @@
 import pytest
 
-from cloudtool import manifest
+from cloudapp import manifest
 from conftest import FIXTURES, load_golden, load_manifest
 
 VALID = ["minimal", "full", "multi", "partial"]

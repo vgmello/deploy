@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vgmello/deploy/terraform/schema/cloud-tool.schema.json",
-  "title": "cloud-tool manifest",
+  "$id": "https://github.com/vgmello/deploy/terraform/schema/cloud-app.schema.json",
+  "title": "cloud-app manifest",
   "type": "object",
   "additionalProperties": false,
   "required": [

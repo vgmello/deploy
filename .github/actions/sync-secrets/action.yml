@@ -27,7 +27,7 @@ runs:
       shell: bash
       run: >-
         PYTHONPATH="${{ github.action_path }}/../../.."
-        python3 -m cloudtool sync-secrets
+        python3 -m cloudapp sync-secrets
         --tool-json "${{ inputs.tool-json }}"
         --keyvault-name "${{ inputs.keyvault-name }}"
         ${{ inputs.require-vault == 'true' && '--require-vault' || '' }}

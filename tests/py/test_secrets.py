@@ -1,6 +1,6 @@
 import pytest
 
-from cloudtool import manifest, secrets
+from cloudapp import manifest, secrets
 from conftest import FIXTURES, FakeResult, FakeRunner
 
 

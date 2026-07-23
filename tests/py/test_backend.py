@@ -1,6 +1,6 @@
 import pytest
 
-from cloudtool import backend
+from cloudapp import backend
 from conftest import ENVDIR
 
 

@@ -3,5 +3,5 @@
 
 # The manifest contract and its consumers change together — extra scrutiny.
 /terraform/schema/ @vgmello
-/cloudtool/ @vgmello
+/cloudapp/ @vgmello
 /.github/ @vgmello
