@@ -1,0 +1,92 @@
+# deploy
+
+A deployment platform that lets teams ship Azure resources through Terraform
+without writing any. Describe an app in a small `.cloud-tool.yml` manifest at
+the root of its repo; a reusable GitHub Actions workflow translates the
+manifest into Terraform and deploys it. Behind the scenes each tool gets a
+full stack — Container Apps / Functions / Static Web Apps, Key Vault, optional
+database and blob storage — wired together over private networking by default.
+
+## For app teams
+
+Two files in your repo:
+
+```yaml
+# .cloud-tool.yml
+name: orders-api
+app:
+  port: 8080
+database:
+  size: small
+environments:
+  dev: {}
+  prod:
+    database:
+      size: medium
+```
+
+```yaml
+# .github/workflows/deploy.yml
+name: deploy
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: { contents: read, id-token: write }
+jobs:
+  deploy:
+    uses: vgmello/deploy/.github/workflows/deploy.yml@v1
+    secrets: inherit
+    with:
+      plan_only: ${{ github.event_name == 'pull_request' }}
+      deploy_ref: v1
+```
+
+Full manifest reference and onboarding steps: [docs/usage.md](docs/usage.md).
+
+## What's in this repo
+
+| Path                                      | What                                                                                                                                          |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `terraform/schema/cloud-tool.schema.json` | Manifest JSON Schema                                                                                                                          |
+| `cloudtool/`                              | Python package with all action logic (validate, merge, normalize, build, secrets, deploy)                                                     |
+| `.github/actions/`                        | Composite actions — thin `python3 -m cloudtool` adapters                                                                                      |
+| `.github/workflows/deploy.yml`            | Reusable deploy workflow (`workflow_call`)                                                                                                    |
+| `terraform/`                              | Root module + compute (`container-app`, `function`, `static-site`) and shared (`keyvault`, `database`, `storage`, `private-endpoint`) modules |
+| `environments/`                           | Per-environment platform config (subscription, VNet, DNS zones, ACR, state, deploy SP)                                                        |
+| `docs/superpowers/specs/`                 | Design spec                                                                                                                                   |
+
+## Manifest at a glance
+
+- `name` + at least one compute section (`app`/`apps`, `functions`, `static_sites`).
+- `app:` is shorthand for a single-app repo; `apps:` is a map for several.
+- Each app takes a `containers:` map (Terraform `template.container` hierarchy);
+  single-container fields (`cpu`, `memory`, `docker`/`image`, `env`, `secrets`)
+  are shorthand that folds into `containers.main`.
+- `ingress` is `public` / `internal` / `none`, or an object mirroring the
+  Terraform ingress block.
+- `database.type` is `postgres` (default) or `sqlserver`.
+- Everything is private by default; opt out with `public_access: true` or
+  `ingress: public`.
+- Per-environment overrides live under `environments.<env>` and deep-merge.
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+python3 -m pytest tests/py            # action logic
+terraform -chdir=terraform test       # module logic (offline, mock providers)
+```
+
+CI (`.github/workflows/ci.yml`) runs pytest, `terraform validate` + `terraform test`,
+a fixture-drift check, `terraform fmt -check`, `tflint`, and actionlint on every
+push to `main` and pull request.
+
+> **Status:** the platform is fully built and tested offline, but has not yet
+> been run against a live Azure subscription. A landing zone (VNet, subnets,
+> private DNS zones, Container Apps environment, ACR, Terraform state storage)
+> and per-environment deploy service principals with OIDC federation are
+> prerequisites — see `environments/*.yml` and [docs/usage.md](docs/usage.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

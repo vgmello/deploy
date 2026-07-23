@@ -1,0 +1,7 @@
+# Default owner for everything in this repo.
+* @vgmello
+
+# The manifest contract and its consumers change together — extra scrutiny.
+/terraform/schema/ @vgmello
+/cloudtool/ @vgmello
+/.github/ @vgmello

@@ -93,3 +93,55 @@ def test_resolve_config_missing_platform_returns_nonzero(tmp_path, capsys):
     ])
     assert rc == 1
     assert "platform config not found" in capsys.readouterr().out
+
+
+def test_enumerate_builds_prints_plan(tmp_path, capsys):
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "full.yml"),
+        "--output-dir", str(tmp_path),
+    ])
+    rc = cli.main([
+        "enumerate-builds", "--tool-json", str(tmp_path / "tool.dev.json"),
+        "--tool-name", "orders-api", "--registry", "acr.example.io", "--git-sha", "sha1",
+    ])
+    assert rc == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert "api/main" in plan["tags"]
+
+
+def test_docker_build_command_builds_and_writes_image_tags(tmp_path, monkeypatch):
+    from cloudtool import runner
+    calls = []
+    monkeypatch.setattr(runner, "run", lambda *a, **k: calls.append(a[0]))
+    gh = tmp_path / "gh"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "full.yml"),
+        "--output-dir", str(tmp_path),
+    ])
+    rc = cli.main([
+        "docker-build", "--tool-json", str(tmp_path / "tool.dev.json"),
+        "--tool-name", "orders-api", "--registry", "acr.example.io", "--git-sha", "sha1",
+    ])
+    assert rc == 0
+    assert any(c[:2] == ["docker", "build"] for c in calls)
+    assert "image-tags=" in gh.read_text()
+
+
+def test_sync_secrets_command_no_secrets(tmp_path, monkeypatch):
+    from cloudtool import runner
+    monkeypatch.setattr(runner, "run", lambda *a, **k: None)
+    monkeypatch.setenv("ALL_SECRETS", "{}")
+    gh = tmp_path / "gh"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(gh))
+    cli.main([
+        "parse-manifest", "--manifest", str(FIXTURES / "minimal.yml"),
+        "--output-dir", str(tmp_path),
+    ])
+    rc = cli.main([
+        "sync-secrets", "--tool-json", str(tmp_path / "tool.dev.json"),
+        "--keyvault-name", "kv-x",
+    ])
+    assert rc == 0
+    assert "secret-count=0" in gh.read_text()
+
