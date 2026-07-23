@@ -1,0 +1,14 @@
+name: billing
+apps:
+  gateway:
+    ingress:
+      external: true
+      target_port: 3000
+      transport: http2
+    containers:
+      web:
+        docker: { file: ./web/Dockerfile }
+      proxy:
+        cpu: 0.25
+        memory: 0.5Gi
+        env: { MODE: sidecar }

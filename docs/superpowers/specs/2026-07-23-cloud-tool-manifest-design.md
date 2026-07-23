@@ -45,9 +45,9 @@ name: orders-api
 
 apps: # Azure Container Apps; map key = app identifier
   api:
-    port: 8080 # default 8080
+    port: 8080 # default 8080; shorthand for ingress.target_port
     ingress: internal # public | internal | none — default internal; none = worker
-    cpu: 0.5 # defaults per entry
+    cpu: 0.5 # single-container shorthand (folds into containers.main)
     memory: 1Gi
     replicas: { min: 1, max: 3 }
     docker:
@@ -59,6 +59,20 @@ apps: # Azure Container Apps; map key = app identifier
       - STRIPE_KEY
   worker:
     ingress: none # worker = container app without ingress
+  gateway:
+    ingress: # object form mirrors the Terraform ingress block
+      external: true
+      target_port: 3000
+      exposed_port: 3000
+      transport: http2 # auto | http | http2 | tcp
+      allow_insecure: false
+    containers: # multi-container form, mirrors Terraform template.container
+      web:
+        docker: { file: ./web/Dockerfile }
+      proxy:
+        cpu: 0.25
+        memory: 0.5Gi
+        env: { MODE: sidecar }
 
 functions: # Azure Function Apps; map key = function app identifier
   processor:
@@ -91,7 +105,9 @@ Rules:
 
 - `name` is required, plus at least one of `apps`, `functions`, `static_sites` (each non-empty when present).
 - Compute sections are maps, not lists — env overlays deep-merge per entry key.
-- All entries share one resource group, one Key Vault, and (for apps) one Container Apps environment per env.
+- All entries share one resource group and one Key Vault per env; apps deploy into the platform's shared Container Apps environment (ID from platform config).
+- Apps: `containers:` map mirrors Terraform's `template.container` list. App-level `cpu`/`memory`/`docker`/`env`/`secrets` are single-container shorthand; mixing shorthand with `containers:` is a schema error. `parse-manifest` normalizes both forms so `tool.<env>.json` always has an explicit `containers` map (shorthand becomes `containers.main`).
+- `ingress` accepts the string shorthand (`public`/`internal`/`none`) or an object mirroring the Terraform ingress block (`external`, `target_port`, `exposed_port`, `transport`, `allow_insecure`). Normalized output is always the object form (or omitted for `none`); `port` fills `target_port` when the object doesn't set it.
 - Each entry takes an optional `name:` override for its Azure base name (see Naming).
 - A resource section absent = resource not created. Exception: Key Vault is always created.
 - `environments:` keys define which environments exist. Each key must have a matching platform config file in this repo (`environments/<env>.yml`); missing file is a hard failure.
@@ -108,7 +124,7 @@ Composite actions parse and deep-merge configuration in this order (later wins):
 
 1. Tool config (manifest top level)
 2. Environment overlay (manifest `environments.<env>`)
-3. Per-entry defaults (each `apps`/`functions`/`static_sites` entry filled from its defaults file; `database`/`storage` section defaults when present)
+3. Per-entry defaults + normalization (`functions`/`static_sites` entries filled from defaults files; `database`/`storage` section defaults; apps normalized via `normalize.jq` — shorthand → `containers.main`, ingress string → object, container/replica defaults)
 4. Platform environment config (`environments/<env>.yml` in this repo)
 
 The result is a single `tfvars.json` consumed by one static Terraform root module. The merge logic lives in composite actions (testable shell/yq), and Terraform stays static and reviewable.
@@ -191,7 +207,7 @@ jobs:
 - Input is the single merged `tfvars.json`. Variable `config` typed `any`; locals normalize with `try()` defaults. Schema validation already happened in GHA.
 - Per tool+env: one resource group `rg-<name>-<env>` shared by all entries.
 - Compute modules instantiated with `for_each` over the `apps` / `functions` / `static_sites` maps (`container-app` / `function` / `static-site` modules).
-- Shared modules are composed by the root, not by compute modules: keyvault (always), one Container Apps environment (if any apps), postgres (if `database`), storage (if `storage`). Compute modules receive resolved references only (Key Vault id, secret names).
+- Shared modules are composed by the root, not by compute modules: keyvault (always), postgres (if `database`), storage (if `storage`). Compute modules receive resolved references only (Key Vault id, secret names, Container Apps environment ID from platform config).
 
 **Networking** (all IDs from platform env config):
 
@@ -199,7 +215,7 @@ jobs:
 - `private-endpoint` shared module wires PE + private DNS zone group per resource: postgres, blob, Key Vault, and the app itself when `ingress: internal`.
 - Postgres: private access; platform config chooses delegated subnet vs PE per landing-zone convention (default PE); `public_network_access = false` unless `public_access: true`.
 - Storage / Key Vault: `public_network_access = false` + PE. Deploy-time access from GHA runners controlled by platform config flag `runner_access: private | public-allowlist` — self-hosted runners inside the VNet for fully private; fallback temporarily allowlists the runner IP during apply.
-- Container Apps: one managed environment per tool+env shared by all apps (workload profiles, VNet-integrated, internal by default). `ingress: public` = external ingress; `ingress: none` = no ingress block (worker).
+- Container Apps: the managed environment is platform-level infrastructure, shared by all tools in an env (workload profiles, VNet-integrated, internal by default); its ID lives in platform config (`container_apps_environment_id`). `ingress: public` / `external: true` = external ingress; `ingress: none` = no ingress block (worker).
 - Static Web Apps: always public frontend in v1; documented limitation.
 
 **State:** `azurerm` backend, storage account from platform config, key `<name>/<env>.tfstate`, locking via blob lease.
@@ -224,7 +240,7 @@ jobs:
 
 Per-entry base name: `<manifest-name>-<entry-key>`, deduped to `<manifest-name>` when the section has exactly one entry; an explicit `name:` on the entry overrides the base entirely. Azure resources add the type prefix: `ca-<base>-<env>` (container app), `func-<base>-<env>` (function app), `swa-<base>-<env>` (static site), `id-<base>-<env>` (identity).
 
-Shared per tool+env: `rg-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars), `psql-<name>-<env>`, `st<name><env>` (alphanumeric only, truncated to 24), `cae-<name>-<env>`. Truncation collision risk is checked in `parse-manifest`, which warns on collision.
+Shared per tool+env: `rg-<name>-<env>`, `kv-<name>-<env>` (truncated to 24 chars), `psql-<name>-<env>`, `st<name><env>` (alphanumeric only, truncated to 24). The Container Apps environment is platform-owned (not per tool); its ID comes from platform config. Truncation collision risk is checked in `parse-manifest`, which warns on collision.
 
 ## Error handling
 

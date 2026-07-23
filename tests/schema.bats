@@ -48,3 +48,13 @@ validate() {
   run validate invalid-no-compute.yml
   [ "$status" -ne 0 ]
 }
+
+@test "multi-container manifest with ingress object is valid" {
+  run validate multi.yml
+  [ "$status" -eq 0 ]
+}
+
+@test "app mixing containers map with shorthand container fields is invalid" {
+  run validate invalid-mixed-container.yml
+  [ "$status" -ne 0 ]
+}

@@ -62,3 +62,15 @@ teardown() { rm -rf "$TMP"; }
   [ "$status" -eq 0 ]
   grep -q '^environments=\["dev","prod"\]$' "$TMP/out/outputs.txt"
 }
+
+@test "multi-container manifest with ingress object produces normalized golden" {
+  run "$SCRIPT" "$FIXTURES/multi.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  diff <(jq -S . "$TMP/out/tool.dev.json") <(jq -S . "$GOLDEN/multi.dev.json")
+}
+
+@test "docker output true when a container has docker section" {
+  run "$SCRIPT" "$FIXTURES/multi.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^docker=true$' "$TMP/out/outputs.txt"
+}
