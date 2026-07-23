@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import yaml
+from .yamlcompat import load_yaml
 
 
 class ResolveError(Exception):
@@ -16,5 +16,5 @@ def resolve(tool, platform_path, env_name):
             f"platform config not found: {platform_path} "
             f"(environment '{env_name}' has no platform config file)"
         )
-    platform = yaml.safe_load(platform_path.read_text())
+    platform = load_yaml(platform_path.read_text())
     return {"config": {**tool, "environment": env_name, "platform": platform}}

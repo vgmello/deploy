@@ -3,7 +3,7 @@
 import re
 import time
 
-from . import gha
+from . import gha, runner as _runner
 
 NOT_FOUND = re.compile(r"ResourceNotFound|was not found|could not be found", re.I)
 
@@ -23,7 +23,8 @@ def collect(tool):
     return [{"name": n, "kv_name": n.lower().replace("_", "-")} for n in sorted(names)]
 
 
-def sync(tool, vault, all_secrets, run, require_vault=False, runner_ip=None, sleep=time.sleep):
+def sync(tool, vault, all_secrets, run, require_vault=False, fetch_ip=_runner.fetch_runner_ip,
+         sleep=time.sleep):
     """Push manifest secrets into the vault. Returns action outputs.
 
     Tolerates a not-yet-created vault (first deploy) unless require_vault;
@@ -50,6 +51,8 @@ def sync(tool, vault, all_secrets, run, require_vault=False, runner_ip=None, sle
             return {**outputs, "vault-exists": "false"}
         raise SyncError(f"az keyvault show failed for a reason other than not-found:\n{show.stderr}")
 
+    # Only now that the vault exists do we need this runner's IP on its firewall.
+    runner_ip = fetch_ip()
     if runner_ip:
         rule = run(
             ["az", "keyvault", "network-rule", "add", "--name", vault,

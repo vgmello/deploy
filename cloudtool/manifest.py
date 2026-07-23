@@ -8,8 +8,9 @@ single-container shorthand folds into ``containers.main``.
 import json
 from pathlib import Path
 
-import yaml
 from jsonschema import Draft202012Validator
+
+from .yamlcompat import load_yaml as _load_yaml_12
 
 _PKG = Path(__file__).parent
 SCHEMA_PATH = _PKG.parent / "terraform" / "schema" / "cloud-tool.schema.json"
@@ -35,7 +36,7 @@ def deep_merge(base, override):
 
 
 def _load_yaml(path):
-    return yaml.safe_load(Path(path).read_text()) or {}
+    return _load_yaml_12(Path(path).read_text()) or {}
 
 
 def validate(manifest):
@@ -121,7 +122,7 @@ def parse(manifest_path, app_root="."):
 
     Returns (name, environments, tools, docker) where tools maps env -> config.
     """
-    manifest = yaml.safe_load(Path(manifest_path).read_text())
+    manifest = _load_yaml_12(Path(manifest_path).read_text())
     errors = validate(manifest)
     if errors:
         raise ManifestError("manifest validation failed:\n" + "\n".join(errors))

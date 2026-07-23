@@ -53,16 +53,24 @@ def test_sync_skips_unchanged_secret():
     run = FakeRunner([
         (("az", "keyvault", "secret", "show"), FakeResult(0, stdout="v\n")),
     ])
-    secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run, runner_ip="1.2.3.4")
+    secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run, fetch_ip=lambda: "1.2.3.4")
     assert run.commands("az", "keyvault", "secret", "set") == []
     assert len(run.commands("az", "keyvault", "network-rule", "add")) == 1
+
+
+def test_sync_does_not_fetch_ip_when_vault_missing():
+    fetched = []
+    run = FakeRunner([(("az", "keyvault", "show"), FakeResult(1, stderr="ResourceNotFound"))])
+    secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run,
+                 fetch_ip=lambda: fetched.append(1))
+    assert fetched == []
 
 
 def test_sync_sets_changed_secret():
     run = FakeRunner([
         (("az", "keyvault", "secret", "show"), FakeResult(1, stderr="not found")),
     ])
-    outputs = secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run)
+    outputs = secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run, fetch_ip=lambda: None)
     sets = run.commands("az", "keyvault", "secret", "set")
     assert len(sets) == 1
     assert "stripe-key" in sets[0]
@@ -76,6 +84,7 @@ def test_sync_retries_set_once_then_fails():
         (("az", "keyvault", "secret", "set"), FakeResult(1, stderr="rbac lag")),
     ])
     with pytest.raises(secrets.SyncError, match="failed to set secret stripe-key"):
-        secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run, sleep=sleeps.append)
+        secrets.sync(tool("full"), "kv-x", {"STRIPE_KEY": "v"}, run,
+                     fetch_ip=lambda: None, sleep=sleeps.append)
     assert len(run.commands("az", "keyvault", "secret", "set")) == 2
     assert sleeps == [15]

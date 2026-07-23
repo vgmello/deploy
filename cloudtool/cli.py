@@ -56,14 +56,12 @@ def cmd_docker_build(args):
 def cmd_sync_secrets(args):
     tool = _load_json(args.tool_json)
     all_secrets = json.loads(os.environ.get("ALL_SECRETS") or "{}")
-    has_secrets = bool(secrets.collect(tool))
     outputs = secrets.sync(
         tool,
         args.keyvault_name,
         all_secrets,
         runner.run,
         require_vault=args.require_vault,
-        runner_ip=runner.fetch_runner_ip() if has_secrets else None,
     )
     gha.write_outputs(outputs)
 

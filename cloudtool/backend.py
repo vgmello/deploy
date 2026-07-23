@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import yaml
+from .yamlcompat import load_yaml
 
 
 class BackendError(Exception):
@@ -11,7 +11,7 @@ class BackendError(Exception):
 
 def render(platform_path, name, env):
     """-backend-config key=value lines for one tool + environment."""
-    platform = yaml.safe_load(Path(platform_path).read_text()) or {}
+    platform = load_yaml(Path(platform_path).read_text()) or {}
     state = platform.get("terraform_state") or {}
     for key in ("resource_group", "storage_account", "container"):
         if not state.get(key):

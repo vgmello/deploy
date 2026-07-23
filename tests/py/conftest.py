@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -47,7 +48,9 @@ class FakeRunner:
                 if callable(result):
                     result = result(cmd)
                 if check and result.returncode != 0:
-                    raise RuntimeError(f"command failed: {cmd}")
+                    raise subprocess.CalledProcessError(
+                        result.returncode, cmd, output=result.stdout, stderr=result.stderr
+                    )
                 return result
         return FakeResult()
 
