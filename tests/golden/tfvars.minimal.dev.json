@@ -1,0 +1,46 @@
+{
+  "config": {
+    "name": "orders-api",
+    "type": "container-app",
+    "environment": "dev",
+    "app": {
+      "port": 8080,
+      "ingress": "internal",
+      "cpu": 0.5,
+      "memory": "1Gi",
+      "replicas": { "min": 1, "max": 3 },
+      "env": {},
+      "secrets": []
+    },
+    "platform": {
+      "subscription_id": "00000000-0000-0000-0000-000000000000",
+      "tenant_id": "00000000-0000-0000-0000-000000000000",
+      "location": "eastus2",
+      "naming_prefix": "",
+      "network": {
+        "vnet_id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev",
+        "subnets": {
+          "container_apps": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev/subnets/snet-aca",
+          "private_endpoints": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev/subnets/snet-pe",
+          "functions": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-dev/providers/Microsoft.Network/virtualNetworks/vnet-spoke-dev/subnets/snet-func"
+        },
+        "private_dns_zone_ids": {
+          "postgres": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com",
+          "blob": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net",
+          "keyvault": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net"
+        }
+      },
+      "acr": {
+        "login_server": "acrplatformdev.azurecr.io",
+        "resource_group": "rg-platform-dev"
+      },
+      "terraform_state": {
+        "resource_group": "rg-tfstate",
+        "storage_account": "sttfstatedev",
+        "container": "tfstate"
+      },
+      "deploy": { "client_id": "00000000-0000-0000-0000-000000000000" },
+      "runner_access": "public-allowlist"
+    }
+  }
+}
