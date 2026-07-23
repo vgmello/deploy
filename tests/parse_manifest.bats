@@ -33,3 +33,32 @@ teardown() { rm -rf "$TMP"; }
   [ "$status" -ne 0 ]
   [ ! -f "$TMP/out/tool.dev.json" ]
 }
+
+@test "outputs file contains name, type, environments, docker" {
+  run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^name=orders-api$' "$TMP/out/outputs.txt"
+  grep -q '^type=container-app$' "$TMP/out/outputs.txt"
+  grep -q '^environments=\["dev"\]$' "$TMP/out/outputs.txt"
+  grep -q '^docker=false$' "$TMP/out/outputs.txt"
+}
+
+@test "docker output true when Dockerfile exists in app root" {
+  mkdir -p "$TMP/approot"
+  touch "$TMP/approot/Dockerfile"
+  run "$SCRIPT" "$FIXTURES/minimal.yml" "$TMP/out" "$TMP/approot"
+  [ "$status" -eq 0 ]
+  grep -q '^docker=true$' "$TMP/out/outputs.txt"
+}
+
+@test "docker output true when manifest has docker section" {
+  run "$SCRIPT" "$FIXTURES/full.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^docker=true$' "$TMP/out/outputs.txt"
+}
+
+@test "environments output lists manifest env keys" {
+  run "$SCRIPT" "$FIXTURES/full.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  grep -q '^environments=\["dev","prod"\]$' "$TMP/out/outputs.txt"
+}
