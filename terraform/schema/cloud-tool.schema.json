@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vgmello/deploy/terraform/schema/cloud-tool.schema.json",
+  "title": "cloud-tool manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "type"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,29}$" },
+    "type": { "enum": ["container-app", "function", "static-site"] },
+    "app": { "$ref": "#/$defs/app" },
+    "database": { "$ref": "#/$defs/database" },
+    "storage": { "$ref": "#/$defs/storage" },
+    "environments": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9]{1,15}$" },
+      "additionalProperties": { "$ref": "#/$defs/overlay" }
+    }
+  },
+  "$defs": {
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "ingress": { "enum": ["public", "internal", "none"] },
+        "cpu": { "type": "number", "exclusiveMinimum": 0 },
+        "memory": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?Gi$" },
+        "replicas": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "integer", "minimum": 0 },
+            "max": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "docker": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "context": { "type": "string" }
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "secrets": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": { "enum": ["small", "medium", "large"] },
+        "storage_gb": { "type": "integer", "minimum": 32, "maximum": 16384 },
+        "public_access": { "type": "boolean" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "containers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{1,61})?[a-z0-9]$"
+          }
+        },
+        "public_access": { "type": "boolean" }
+      }
+    },
+    "overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "app": { "$ref": "#/$defs/app" },
+        "database": { "$ref": "#/$defs/database" },
+        "storage": { "$ref": "#/$defs/storage" }
+      }
+    }
+  }
+}
