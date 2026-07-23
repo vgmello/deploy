@@ -1,3 +1,4 @@
 name: orders-api
-type: container-app
+apps:
+  api: {}
 environments: {}

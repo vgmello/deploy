@@ -14,9 +14,6 @@ outputs:
   name:
     description: Tool name
     value: ${{ steps.parse.outputs.name }}
-  type:
-    description: Tool type (preset)
-    value: ${{ steps.parse.outputs.type }}
   environments:
     description: JSON array of environment names
     value: ${{ steps.parse.outputs.environments }}

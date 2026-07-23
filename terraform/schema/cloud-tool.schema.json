@@ -4,11 +4,32 @@
   "title": "cloud-tool manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "type"],
+  "required": ["name"],
+  "anyOf": [
+    { "required": ["apps"] },
+    { "required": ["functions"] },
+    { "required": ["static_sites"] }
+  ],
   "properties": {
     "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,29}$" },
-    "type": { "enum": ["container-app", "function", "static-site"] },
-    "app": { "$ref": "#/$defs/app" },
+    "apps": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,29}$" },
+      "additionalProperties": { "$ref": "#/$defs/app" }
+    },
+    "functions": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,29}$" },
+      "additionalProperties": { "$ref": "#/$defs/function" }
+    },
+    "static_sites": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,29}$" },
+      "additionalProperties": { "$ref": "#/$defs/static_site" }
+    },
     "database": { "$ref": "#/$defs/database" },
     "storage": { "$ref": "#/$defs/storage" },
     "environments": {
@@ -23,6 +44,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,29}$" },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "ingress": { "enum": ["public", "internal", "none"] },
         "cpu": { "type": "number", "exclusiveMinimum": 0 },
@@ -53,6 +75,40 @@
         }
       }
     },
+    "function": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,29}$" },
+        "docker": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "context": { "type": "string" }
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "secrets": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+        }
+      }
+    },
+    "static_site": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,29}$" },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
     "database": {
       "type": "object",
       "additionalProperties": false,
@@ -80,7 +136,18 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "app": { "$ref": "#/$defs/app" },
+        "apps": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/app" }
+        },
+        "functions": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/function" }
+        },
+        "static_sites": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/static_site" }
+        },
         "database": { "$ref": "#/$defs/database" },
         "storage": { "$ref": "#/$defs/storage" }
       }

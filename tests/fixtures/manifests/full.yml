@@ -1,19 +1,26 @@
 name: orders-api
-type: container-app
 
-app:
-  port: 8080
-  ingress: internal
-  cpu: 0.5
-  memory: 1Gi
-  replicas: { min: 1, max: 3 }
-  docker:
-    file: ./Dockerfile
-    context: .
-  env:
-    LOG_LEVEL: info
-  secrets:
-    - STRIPE_KEY
+apps:
+  api:
+    port: 8080
+    ingress: internal
+    cpu: 0.5
+    memory: 1Gi
+    replicas: { min: 1, max: 3 }
+    docker:
+      file: ./Dockerfile
+      context: .
+    env:
+      LOG_LEVEL: info
+    secrets:
+      - STRIPE_KEY
+  worker:
+    ingress: none
+
+functions:
+  processor:
+    env:
+      QUEUE: jobs
 
 database:
   size: small
@@ -27,8 +34,9 @@ storage:
 environments:
   dev: {}
   prod:
-    app:
-      replicas: { min: 2, max: 10 }
-      env: { LOG_LEVEL: warn }
+    apps:
+      api:
+        replicas: { min: 2, max: 10 }
+        env: { LOG_LEVEL: warn }
     database:
       size: medium

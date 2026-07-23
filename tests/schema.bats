@@ -29,8 +29,8 @@ validate() {
   [ "$status" -ne 0 ]
 }
 
-@test "bad type is invalid" {
-  run validate invalid-bad-type.yml
+@test "legacy type key is invalid" {
+  run validate invalid-legacy-type.yml
   [ "$status" -ne 0 ]
 }
 
@@ -41,5 +41,10 @@ validate() {
 
 @test "empty environments map is invalid" {
   run validate invalid-empty-environments.yml
+  [ "$status" -ne 0 ]
+}
+
+@test "manifest without apps, functions, or static_sites is invalid" {
+  run validate invalid-no-compute.yml
   [ "$status" -ne 0 ]
 }
