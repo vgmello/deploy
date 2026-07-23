@@ -11,6 +11,7 @@ def fold_shorthand:
         (if .cpu     != null then {"cpu": .cpu}         else {} end)
       + (if .memory  != null then {"memory": .memory}   else {} end)
       + (if .docker  != null then {"docker": .docker}   else {} end)
+      + (if .image   != null then {"image": .image}     else {} end)
       + (if .env     != null then {"env": .env}         else {} end)
       + (if .secrets != null then {"secrets": .secrets} else {} end)
     )}

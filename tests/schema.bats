@@ -78,3 +78,13 @@ validate() {
   run validate invalid-app-and-apps.yml
   [ "$status" -ne 0 ]
 }
+
+@test "container with prebuilt image is valid" {
+  run validate multi.yml
+  [ "$status" -eq 0 ]
+}
+
+@test "image and docker together is invalid" {
+  run validate invalid-image-and-docker.yml
+  [ "$status" -ne 0 ]
+}

@@ -1,0 +1,5 @@
+name: orders-api
+app:
+  image: nginx:1.27
+  docker:
+    file: ./Dockerfile

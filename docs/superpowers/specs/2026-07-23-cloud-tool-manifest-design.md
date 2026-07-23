@@ -33,10 +33,16 @@ This repo contains everything: the Terraform modules and presets, the reusable w
 Lives at the root of the app repo. Path overridable via workflow input. `name` plus at least one compute section (`apps`, `functions`, or `static_sites`) required. There is no `type` field — sections define what gets created.
 
 ```yaml
-# minimal — everything defaulted
+# minimal — everything defaulted; singular shorthand for one-app repos
 name: orders-api
-apps:
-  api: {}
+app: {}
+```
+
+```yaml
+# prebuilt image instead of a docker build
+name: orders-api
+app:
+  image: myacr.azurecr.io/orders-api:1.4.2
 ```
 
 ```yaml
@@ -104,7 +110,9 @@ environments: # keys define which envs exist; values deep-merge over the above
 
 Rules:
 
-- `name` is required, plus at least one of `apps`, `functions`, `static_sites` (each non-empty when present).
+- `name` is required, plus at least one compute section: `app`, `apps`, `functions`, or `static_sites` (maps non-empty when present).
+- `app:` is singular shorthand for one-app repos — folded into `apps.main` at parse time. `app` + `apps` together is a schema error (also caught post-merge when an overlay mixes forms).
+- Each container (or shorthand) declares either `docker:` (built and pushed by the workflow) or `image:` (prebuilt reference deployed as-is) — never both.
 - Compute sections are maps, not lists — env overlays deep-merge per entry key.
 - All entries share one resource group and one Key Vault per env; apps deploy into the platform's shared Container Apps environment (ID from platform config).
 - Apps: `containers:` map mirrors Terraform's `template.container` list. App-level `cpu`/`memory`/`docker`/`env`/`secrets` are single-container shorthand; mixing shorthand with `containers:` is a schema error. `parse-manifest` normalizes both forms so `tool.<env>.json` always has an explicit `containers` map (shorthand becomes `containers.main`).
@@ -183,8 +191,9 @@ jobs:
   setup                 parse manifest, validate vs JSON Schema,
                         outputs: envs[], docker?, tool name
   build  (if docker)    docker-build action → push ACR, tag = git sha
-                        one image per docker-enabled entry, built ONCE;
-                        images promoted across envs, never rebuilt
+                        one image per docker: container, built ONCE;
+                        images promoted across envs, never rebuilt.
+                        image: containers skip build, deployed as-is
   deploy-<env>          one job per env in manifest key order, chained
                         (e.g. dev → staging → prod). Each:
                           environment: <env>     ← GHA approval gate lives here

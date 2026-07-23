@@ -7,11 +7,12 @@ apps:
       transport: http2
     containers:
       web:
-        docker: { file: ./web/Dockerfile }
+        docker: {file: ./web/Dockerfile}
       proxy:
         cpu: 0.25
         memory: 0.5Gi
-        env: { MODE: sidecar }
+        env: {MODE: sidecar}
+        image: nginx:1.27
 database:
   type: sqlserver
   size: medium

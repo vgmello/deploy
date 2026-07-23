@@ -85,3 +85,9 @@ teardown() { rm -rf "$TMP"; }
   run "$SCRIPT" "$FIXTURES/invalid-overlay-app-mix.yml" "$TMP/out"
   [ "$status" -ne 0 ]
 }
+
+@test "prebuilt image passes through to normalized container" {
+  run "$SCRIPT" "$FIXTURES/multi.yml" "$TMP/out"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.apps.gateway.containers.proxy.image' "$TMP/out/tool.dev.json")" = "nginx:1.27" ]
+}
