@@ -11,10 +11,11 @@ RG="$(yq '.terraform_state.resource_group' "$PLATFORM")"
 ACCOUNT="$(yq '.terraform_state.storage_account' "$PLATFORM")"
 CONTAINER="$(yq '.terraform_state.container' "$PLATFORM")"
 
-declare -A KEYS=([RG]=resource_group [ACCOUNT]=storage_account [CONTAINER]=container)
-for v in RG ACCOUNT CONTAINER; do
+for pair in RG:resource_group ACCOUNT:storage_account CONTAINER:container; do
+  v="${pair%%:*}"
+  yml_key="${pair##*:}"
   if [ -z "${!v}" ] || [ "${!v}" = "null" ]; then
-    echo "error: terraform_state.${KEYS[$v]} missing in $PLATFORM" >&2
+    echo "error: terraform_state.$yml_key missing in $PLATFORM" >&2
     exit 1
   fi
 done

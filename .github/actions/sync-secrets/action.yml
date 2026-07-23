@@ -65,7 +65,8 @@ runs:
         RUNNER_IP=$(curl -fsS --retry 3 --retry-delay 5 https://api.ipify.org || true)
         if [ -n "$RUNNER_IP" ]; then
           az keyvault network-rule add --name "${{ inputs.keyvault-name }}" \
-            --ip-address "$RUNNER_IP" --output none < /dev/null 2>/dev/null || true
+            --ip-address "$RUNNER_IP" --output none < /dev/null 2>/dev/null \
+            || echo "::warning::could not allowlist runner IP on ${{ inputs.keyvault-name }}; secret writes may hit the vault firewall"
         fi
 
         set_secret() { # kv_name value

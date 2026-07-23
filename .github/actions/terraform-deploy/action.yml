@@ -81,11 +81,12 @@ runs:
         for t in $TARGETS; do ARGS+=(-target="$t"); done
 
         terraform -chdir="${{ inputs.terraform-dir }}" plan "${ARGS[@]}" -out=tfplan | tail -20
+        terraform -chdir="${{ inputs.terraform-dir }}" show -no-color tfplan > plan.txt
         {
           echo "<details><summary>terraform plan (${{ inputs.environment }})</summary>"
           echo
           echo '```'
-          terraform -chdir="${{ inputs.terraform-dir }}" show -no-color tfplan | head -200
+          head -200 plan.txt
           echo '```'
           echo "</details>"
         } >> "$GITHUB_STEP_SUMMARY"
