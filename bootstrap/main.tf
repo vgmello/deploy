@@ -46,10 +46,9 @@ resource "azurerm_role_assignment" "bootstrap" {
 }
 
 resource "azurerm_federated_identity_credential" "bootstrap" {
-  name                = "gha-${var.environment}"
-  resource_group_name = azurerm_resource_group.identities.name
-  parent_id           = azurerm_user_assigned_identity.bootstrap.id
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = "https://token.actions.githubusercontent.com"
-  subject             = "repo:${var.trusted_repo}:environment:${var.environment}"
+  name      = "gha-${var.environment}"
+  parent_id = azurerm_user_assigned_identity.bootstrap.id
+  audience  = ["api://AzureADTokenExchange"]
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = "repo:${var.trusted_repo}:environment:${var.environment}"
 }
