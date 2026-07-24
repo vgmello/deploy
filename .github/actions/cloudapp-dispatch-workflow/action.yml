@@ -1,0 +1,51 @@
+name: cloudapp-dispatch-workflow
+description: >-
+  Dispatch a workflow_dispatch event in a target repo and wait for the run to
+  finish, failing this step if the target run does not conclude successfully.
+  This is the delegated-mode trigger: a trusted repo runs the deploy on behalf
+  of an app repo.
+inputs:
+  owner:
+    description: Target repo owner
+    required: true
+  repo:
+    description: Target repo name
+    required: true
+  workflow:
+    description: Target workflow file name or id (e.g. deploy.yml)
+    required: true
+  ref:
+    description: Git ref of the target repo to run against
+    default: main
+  token:
+    description: Token with actions:write on the target repo
+    required: true
+  inputs:
+    description: JSON object of workflow_dispatch inputs to forward to the target
+    default: "{}"
+runs:
+  using: composite
+  steps:
+    - id: forward
+      shell: bash
+      env:
+        FORWARD_INPUTS: ${{ inputs.inputs }}
+      run: |
+        # Expand the JSON inputs map into the INPUT_<NAME> env vars the script
+        # scrapes, writing them to the job environment for the next step.
+        echo "$FORWARD_INPUTS" | python3 -c '
+        import json, os, sys
+        data = json.load(sys.stdin) or {}
+        with open(os.environ["GITHUB_ENV"], "a") as fh:
+            for key, value in data.items():
+                fh.write(f"INPUT_{key.upper()}={value}\n")
+        '
+
+    - shell: bash
+      env:
+        TARGET_OWNER: ${{ inputs.owner }}
+        TARGET_REPO: ${{ inputs.repo }}
+        TARGET_WORKFLOW: ${{ inputs.workflow }}
+        TARGET_BRANCH: ${{ inputs.ref }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: python3 "${{ github.action_path }}/../../scripts/dispatch_and_wait.py"
