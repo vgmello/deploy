@@ -19,7 +19,7 @@ on:
         default: 'dev'
 
 permissions:
-  contents: read
+  contents: write   # the deploy-stack gate pushes lock updates to the registry
   id-token: write
 
 jobs:

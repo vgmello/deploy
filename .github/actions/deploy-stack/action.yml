@@ -1,5 +1,5 @@
 name: 'deploy-stack'
-description: 'Check out a caller repo''s stack manifest and deploy it through the cloudapp pipeline for one environment.'
+description: 'Authorize a caller repo against the stack-lock registry, then deploy its manifest through the cloudapp pipeline for one environment.'
 
 inputs:
   caller-repo:
@@ -31,36 +31,57 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # Central repo (this repo): holds cloudapp, terraform, environments, and the
+    # lock registry. Checked out with the default token so the lock push in the
+    # gate can write back to main.
+    - name: Checkout central repo
+      uses: actions/checkout@v4
+      with:
+        path: central-workspace
+
+    # Caller repo: holds the stack manifest. Read with the caller-scoped token.
     - name: Checkout caller repo
       uses: actions/checkout@v4
       with:
         repository: ${{ github.repository_owner }}/${{ inputs.caller-repo }}
         ref: ${{ inputs.caller-branch }}
         token: ${{ inputs.github-token }}
-        path: caller
+        path: caller-workspace
 
     - name: Install cloudapp dependencies
       shell: bash
-      run: python3 -m pip install --user -q -r "${{ github.workspace }}/requirements.txt"
+      run: python3 -m pip install --user -q -r central-workspace/requirements.txt
+
+    # Authorization gate: verifies the manifest name matches stack-name and that
+    # this caller owns the stack in the registry (trust-on-first-use). Fails the
+    # job before any deploy if the caller is not authorized.
+    - name: Validate stack ownership
+      shell: bash
+      env:
+        TARGET_ENV: ${{ inputs.environment }}
+        STACK_FILE: ${{ inputs.stack-file }}
+        EXPECTED_STACK_NAME: ${{ inputs.stack-name }}
+        CALLER_REPO: ${{ github.repository_owner }}/${{ inputs.caller-repo }}
+      run: python3 central-workspace/.github/scripts/validate_and_lock.py
 
     - name: Parse manifest
       shell: bash
       env:
-        PYTHONPATH: ${{ github.workspace }}
+        PYTHONPATH: central-workspace
       run: >-
         python3 -m cloudapp parse-manifest
-        --manifest "caller/${{ inputs.stack-file }}"
+        --manifest "caller-workspace/${{ inputs.stack-file }}"
         --output-dir .cloud-app
-        --app-root caller
+        --app-root caller-workspace
 
     - name: Resolve config
       shell: bash
       env:
-        PYTHONPATH: ${{ github.workspace }}
+        PYTHONPATH: central-workspace
       run: >-
         python3 -m cloudapp resolve-config
         --tool-json ".cloud-app/tool.${{ inputs.environment }}.json"
-        --platform-file "environments/${{ inputs.environment }}.yml"
+        --platform-file "central-workspace/environments/${{ inputs.environment }}.yml"
         --environment "${{ inputs.environment }}"
         --out-file tfvars.json
 
@@ -71,13 +92,13 @@ runs:
     - name: Terraform deploy
       shell: bash
       env:
-        PYTHONPATH: ${{ github.workspace }}
+        PYTHONPATH: central-workspace
       run: >-
         python3 -m cloudapp terraform-deploy
-        --terraform-dir terraform
+        --terraform-dir central-workspace/terraform
         --tfvars-file tfvars.json
         --tool-json ".cloud-app/tool.${{ inputs.environment }}.json"
         --tool-name "${{ inputs.stack-name }}"
         --environment "${{ inputs.environment }}"
-        --platform-file "environments/${{ inputs.environment }}.yml"
+        --platform-file "central-workspace/environments/${{ inputs.environment }}.yml"
         ${{ inputs.plan-only == 'true' && '--plan-only' || '' }}
