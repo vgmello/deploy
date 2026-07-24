@@ -121,14 +121,19 @@ pieces are not implemented yet:
 - **`deploy.yml` phase handoff** — the four deploy jobs still do one
   `azure/login` and one main-stack apply. They do not yet run
   `login-plan`, the bootstrap→plan→apply login sequence, or `--stack bootstrap`.
-- **Delegated dispatch** — the trigger side exists
+- **Delegated dispatch** — the full round-trip exists: the trigger side
   (`.github/actions/cloudapp-dispatch-workflow` + `dispatch_and_wait.py`) and the
-  target side exists (`.github/workflows/cloud-app.yml` → `deploy-stack` action,
-  which checks out the caller repo and runs parse→resolve→terraform-deploy). Two
-  gaps remain: `deploy-stack` does not yet perform the OIDC login as the
-  plan/apply identity (it assumes the job is already authenticated), and the
-  `dispatch.authorize` allowlist is defined in code but has no config file and is
-  never called, so an unlisted caller is not yet rejected.
+  target side (`.github/workflows/cloud-app.yml` → `deploy-stack`, which checks
+  out the central repo and the caller repo, runs the stack-ownership gate
+  (`validate_and_lock.py`), then parse→resolve→terraform-deploy). Caller
+  authorization is enforced by the lock registry
+  (`registries/<env>/<stack>.yml`, trust-on-first-use). The one remaining gap:
+  `deploy-stack` does not yet perform the OIDC login as the plan/apply identity —
+  it assumes the job has already authenticated to the state backend and resource
+  plane.
+
+  (The `cloudapp.dispatch.authorize` helper is a code-level allowlist alternative
+  to the registry gate; the registry is the mechanism actually wired in.)
 - **State-container role assignments** — the data-plane grants described above
   are not created by any committed stack.
 - **Bootstrap role ABAC** — the bootstrap role assignment constrains
