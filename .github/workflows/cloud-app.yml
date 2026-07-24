@@ -1,0 +1,56 @@
+name: Cloud App Dispatch Target
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        required: true
+      stack_file:
+        required: true
+        default: 'cloud-app.yml'
+      stack_name:
+        required: true
+        default: 'cloud-app'
+      branch:
+        required: false
+        default: 'main'
+      env:
+        required: false
+        default: 'dev'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.stack_name }} (${{ inputs.env }})
+    runs-on: ubuntu-latest
+
+    # Direct Job-Level Concurrency based on input parameter
+    concurrency:
+      group: deploy-${{ inputs.env }}-${{ inputs.stack_name }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout deploy repo
+        uses: actions/checkout@v4
+
+      - name: Generate App Token for Caller Repo
+        id: caller-app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.repo }}
+
+      - name: Run Stack Deployment
+        uses: ./.github/actions/deploy-stack
+        with:
+          caller-repo: ${{ inputs.repo }}
+          stack-file: ${{ inputs.stack_file }}
+          stack-name: ${{ inputs.stack_name }}
+          caller-branch: ${{ inputs.branch }}
+          environment: ${{ inputs.env }}
+          github-token: ${{ steps.caller-app-token.outputs.token }}
