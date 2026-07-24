@@ -11,6 +11,11 @@ WORKFLOW_ID = os.environ["TARGET_WORKFLOW"]
 BRANCH = os.environ.get("TARGET_BRANCH", "main")
 TOKEN = os.environ["GH_TOKEN"]
 
+# Give up polling after this many consecutive failures (~1 min at 10s each) so a
+# persistent 404 (wrong run id) or expired token does not loop until the job's
+# own timeout.
+MAX_POLL_FAILURES = 6
+
 # Extract target inputs dynamically from environment (INPUT_REPO, INPUT_STACK_FILE, etc.)
 target_inputs = {}
 for env_key, env_value in os.environ.items():
@@ -56,15 +61,25 @@ poll_url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/runs/{run_id}"
 poll_req = urllib.request.Request(poll_url, headers=headers)
 
 last_status = None
+poll_failures = 0
 while True:
     try:
         with urllib.request.urlopen(poll_req) as resp:
             run_data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        print(f"Status poll warning ({e.code}), retrying in 10s...")
+        # 401/403 are auth failures — the token will not recover, so stop now.
+        if e.code in (401, 403):
+            print(f"::error::Auth failed polling run {run_id} ({e.code}); token invalid or lacks access")
+            sys.exit(1)
+        poll_failures += 1
+        if poll_failures >= MAX_POLL_FAILURES:
+            print(f"::error::Gave up polling run {run_id} after {poll_failures} consecutive failures (last {e.code})")
+            sys.exit(1)
+        print(f"Status poll warning ({e.code}), retry {poll_failures}/{MAX_POLL_FAILURES} in 10s...")
         time.sleep(10)
         continue
 
+    poll_failures = 0
     status = run_data["status"]
     conclusion = run_data.get("conclusion")
 
