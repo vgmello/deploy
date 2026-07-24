@@ -49,6 +49,23 @@ inputs:
     required: false
     default: 'main'
 
+outputs:
+  deployment_url:
+    description: 'URL of the deployed app, if the target produced one'
+    value: ${{ steps.dispatch.outputs.deployment_url }}
+  status:
+    description: 'Outcome of the target deploy step'
+    value: ${{ steps.dispatch.outputs.status }}
+  deployed_at:
+    description: 'UTC timestamp of the target deployment'
+    value: ${{ steps.dispatch.outputs.deployed_at }}
+  stack_name:
+    description: 'Deployed stack name'
+    value: ${{ steps.dispatch.outputs.stack_name }}
+  environment:
+    description: 'Target environment'
+    value: ${{ steps.dispatch.outputs.environment }}
+
 runs:
   using: 'composite'
   steps:
@@ -80,6 +97,7 @@ runs:
         repositories: ${{ inputs.target-repo }}
 
     - name: Trigger and Poll Target Workflow
+      id: dispatch
       shell: bash
       env:
         GH_TOKEN: ${{ steps.generate-token.outputs.token }}
@@ -95,3 +113,16 @@ runs:
         INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_ENV: ${{ inputs.env }}
       run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
+
+    - name: Post Summary to Caller Workflow
+      if: always()
+      shell: bash
+      run: |
+        cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+        ### Target Deployment Summary
+        - **Target Repository:** \`${{ inputs.target-repo }}\`
+        - **Stack Name:** \`${{ inputs.stack-name }}\`
+        - **Environment:** \`${{ inputs.env }}\`
+        - **Caller Branch:** \`${{ inputs.branch }}\`
+        - **[View Target Workflow Execution Logs](${{ env.TARGET_RUN_URL }})**
+        EOF

@@ -1,9 +1,11 @@
+import io
 import json
 import os
 import sys
 import time
 import urllib.error
 import urllib.request
+import zipfile
 
 OWNER = os.environ["TARGET_OWNER"]
 REPO = os.environ["TARGET_REPO"]
@@ -53,8 +55,48 @@ except urllib.error.HTTPError as e:
     sys.exit(1)
 
 run_id = data["workflow_run_id"]
+run_html_url = data.get("html_url", "")
 print(f"\nDispatched successfully! Run ID: {run_id}")
-print(f"Run URL: {data.get('html_url', '')}")
+print(f"Run URL: {run_html_url}")
+
+# Publish the target run URL so a later composite step (e.g. a caller summary)
+# can reference it via env.TARGET_RUN_URL.
+github_env = os.environ.get("GITHUB_ENV")
+if github_env:
+    with open(github_env, "a") as fh:
+        fh.write(f"TARGET_RUN_URL={run_html_url}\n")
+
+
+def expose_deployment_outputs():
+    """Download the target run's deployment-outputs artifact and expose the
+    fields of deployment-results.json as this step's outputs. Best-effort —
+    a missing artifact or download error must not fail the dispatch."""
+    gh_output = os.environ.get("GITHUB_OUTPUT")
+    if not gh_output:
+        return
+    artifacts_url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/runs/{run_id}/artifacts"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(artifacts_url, headers=headers)) as resp:
+            artifacts = json.loads(resp.read().decode("utf-8")).get("artifacts", [])
+    except Exception as exc:
+        print(f"::warning::could not list artifacts for run {run_id}: {exc}")
+        return
+    target = next((a for a in artifacts if a["name"] == f"deployment-outputs-{run_id}"), None)
+    if not target:
+        print("::warning::no deployment-outputs artifact on the target run")
+        return
+    try:
+        with urllib.request.urlopen(urllib.request.Request(target["archive_download_url"], headers=headers)) as resp:
+            blob = resp.read()
+        with zipfile.ZipFile(io.BytesIO(blob)) as zf, zf.open("deployment-results.json") as f:
+            results = json.load(f)
+    except Exception as exc:
+        print(f"::warning::could not download/parse deployment outputs: {exc}")
+        return
+    with open(gh_output, "a") as out:
+        for key, value in results.items():
+            out.write(f"{key}={value}\n")
+    print(f"Exposed deployment outputs: {results}")
 
 # 2. Poll Status
 poll_url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/runs/{run_id}"
@@ -122,6 +164,7 @@ while True:
     if status == "completed":
         print(f"\nTarget workflow complete: {(conclusion or 'unknown').upper()}")
         print(f"View logs: {run_data.get('html_url', '')}")
+        expose_deployment_outputs()
         if conclusion != "success":
             sys.exit(1)
         break
