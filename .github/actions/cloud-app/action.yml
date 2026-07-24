@@ -1,5 +1,5 @@
 name: 'cloud-app'
-description: 'The single action an app repo uses to deploy. Reads the stack name from the manifest, generates a GitHub App token, then dispatches and waits on the control-plane deploy for one environment.'
+description: 'The single action an app repo uses to deploy. Reads the stack name from the manifest, then dispatches and waits on the control-plane deploy for one environment.'
 
 inputs:
   app-id:
@@ -56,31 +56,21 @@ outputs:
     value: ${{ steps.dispatch.outputs.deployed_at }}
   stack_name:
     description: 'Deployed stack name'
-    value: ${{ steps.resolve-stack.outputs.stack_name }}
+    value: ${{ steps.dispatch.outputs.stack_name }}
   environment:
     description: 'Target environment'
-    value: ${{ inputs.env }}
+    value: ${{ steps.dispatch.outputs.environment }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Prepare inputs & defaults
-      id: prepare-inputs
+    # The stack name comes from the manifest, so the caller repo must be on
+    # disk. Check it out only if it isn't already (avoids clobbering a workspace
+    # the caller checked out themselves).
+    - name: Determine if checkout is needed
+      id: prep
       shell: bash
       run: |
-        # Owner (defaults to caller repository owner)
-        OWNER="${{ inputs.target-owner }}"
-        [ -z "$OWNER" ] && OWNER="${{ github.repository_owner }}"
-        echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
-
-        # Caller repo name (defaults to the current repository name)
-        CALLER_REPO="${{ inputs.repo }}"
-        [ -z "$CALLER_REPO" ] && CALLER_REPO="${{ github.event.repository.name }}"
-        echo "caller_repo=$CALLER_REPO" >> "$GITHUB_OUTPUT"
-
-        # The stack name comes from the manifest, so the caller repo must be on
-        # disk. Check it out only if it isn't already (avoids clobbering a
-        # workspace the caller checked out themselves).
         if [ -f "${{ inputs.stack-file }}" ]; then
           echo "checkout_needed=false" >> "$GITHUB_OUTPUT"
         else
@@ -88,7 +78,7 @@ runs:
         fi
 
     - name: Checkout caller repo (to read the stack name)
-      if: steps.prepare-inputs.outputs.checkout_needed == 'true'
+      if: steps.prep.outputs.checkout_needed == 'true'
       uses: actions/checkout@v4
 
     - name: Resolve stack name from manifest
@@ -110,45 +100,20 @@ runs:
         fi
         echo "stack_name=$STACK_NAME" >> "$GITHUB_OUTPUT"
 
-    - name: Generate GitHub App token
-      id: generate-token
-      uses: actions/create-github-app-token@v1
+    # Hand the resolved stack name to the low-level dispatch primitive.
+    # NOTE: pinned to @main; bump this ref in lockstep when cloud-app is tagged.
+    - name: Dispatch to control plane
+      id: dispatch
+      uses: vgmello/cloud-app/.github/actions/cloudapp-dispatch-workflow@main
       with:
         app-id: ${{ inputs.app-id }}
-        private-key: ${{ inputs.app-private-key }}
-        owner: ${{ steps.prepare-inputs.outputs.owner }}
-        repositories: ${{ inputs.target-repo }}
-
-    # Orchestrate the dispatch by calling the shared script directly via
-    # github.action_path (resolves to this repo's checkout under _actions), not
-    # by `uses:` a local sibling action — a `./` ref would resolve against the
-    # consumer's workspace. This is the pattern for every engine step here.
-    - name: Dispatch and poll the control-plane deploy
-      id: dispatch
-      shell: bash
-      env:
-        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        TARGET_OWNER: ${{ steps.prepare-inputs.outputs.owner }}
-        TARGET_REPO: ${{ inputs.target-repo }}
-        TARGET_WORKFLOW: ${{ inputs.target-workflow }}
-        TARGET_BRANCH: ${{ inputs.target-branch }}
-
-        INPUT_REPO: ${{ steps.prepare-inputs.outputs.caller_repo }}
-        INPUT_STACK_FILE: ${{ inputs.stack-file }}
-        INPUT_STACK_NAME: ${{ steps.resolve-stack.outputs.stack_name }}
-        INPUT_BRANCH: ${{ inputs.branch }}
-        INPUT_ENV: ${{ inputs.env }}
-      run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
-
-    - name: Post summary to caller workflow
-      if: always()
-      shell: bash
-      run: |
-        cat <<EOF >> "$GITHUB_STEP_SUMMARY"
-        ### Target Deployment Summary
-        - **Target Repository:** \`${{ inputs.target-repo }}\`
-        - **Stack Name:** \`${{ steps.resolve-stack.outputs.stack_name }}\`
-        - **Environment:** \`${{ inputs.env }}\`
-        - **Caller Branch:** \`${{ inputs.branch }}\`
-        - **[View Target Workflow Execution Logs](${{ env.TARGET_RUN_URL }})**
-        EOF
+        app-private-key: ${{ inputs.app-private-key }}
+        repo: ${{ inputs.repo }}
+        stack-file: ${{ inputs.stack-file }}
+        stack-name: ${{ steps.resolve-stack.outputs.stack_name }}
+        branch: ${{ inputs.branch }}
+        env: ${{ inputs.env }}
+        target-owner: ${{ inputs.target-owner }}
+        target-repo: ${{ inputs.target-repo }}
+        target-workflow: ${{ inputs.target-workflow }}
+        target-branch: ${{ inputs.target-branch }}
