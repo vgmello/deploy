@@ -1,5 +1,5 @@
 name: 'cloudapp-dispatch-workflow'
-description: 'The action an app repo uses to deploy: generates a GitHub App token, then dispatches and waits on the control-plane deploy for one stack + environment.'
+description: 'Low-level primitive: generate a GitHub App token, dispatch a target workflow, and poll it to completion. Use the `cloud-app` action instead unless you need to pass the stack name explicitly.'
 
 inputs:
   app-id:
@@ -9,17 +9,19 @@ inputs:
     description: 'GitHub App Private Key (.pem contents)'
     required: true
 
-  # Action Parameters (With Defaults)
   repo:
-    description: 'Repository name calling this action (Defaults to current repository name)'
+    description: 'Caller repository name (Defaults to the current repository name)'
     required: false
     default: ''
   stack-file:
-    description: 'Stack manifest path in the caller repo (Defaults to "cloud-app.yml"). The stack name is read from its top-level `name:`.'
+    description: 'Stack manifest path passed through to the target workflow'
     required: false
     default: 'cloud-app.yml'
+  stack-name:
+    description: 'Stack name passed to the target workflow (the deploy identity/lock key)'
+    required: true
   branch:
-    description: 'Branch to checkout on target repository'
+    description: 'Caller branch to deploy'
     required: false
     default: 'main'
   env:
@@ -83,38 +85,6 @@ runs:
         fi
         echo "caller_repo=$CALLER_REPO" >> "$GITHUB_OUTPUT"
 
-        # 3. The stack name always comes from the manifest, so the caller repo
-        #    must be on disk. Check it out only if it isn't already (avoids
-        #    clobbering a workspace the caller already checked out).
-        if [ -f "${{ inputs.stack-file }}" ]; then
-          echo "checkout_needed=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "checkout_needed=true" >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Checkout caller repo (to read the stack name)
-      if: steps.prepare-inputs.outputs.checkout_needed == 'true'
-      uses: actions/checkout@v4
-
-    - name: Resolve stack name from manifest
-      id: resolve-stack
-      shell: bash
-      run: |
-        STACK_FILE="${{ inputs.stack-file }}"
-        if [ ! -f "$STACK_FILE" ]; then
-          echo "::error::manifest '$STACK_FILE' not found; cannot derive the stack name"
-          exit 1
-        fi
-        # First top-level `name:`; drop inline comment and surrounding quotes/space.
-        STACK_NAME=$(grep -m1 '^name:' "$STACK_FILE" \
-          | sed -e 's/^name:[[:space:]]*//' -e 's/[[:space:]]*#.*$//' \
-                -e 's/^["'\'']//' -e 's/["'\'']$//' -e 's/[[:space:]]*$//')
-        if [ -z "$STACK_NAME" ]; then
-          echo "::error::could not read a top-level 'name:' from '$STACK_FILE'"
-          exit 1
-        fi
-        echo "stack_name=$STACK_NAME" >> "$GITHUB_OUTPUT"
-
     - name: Generate GitHub App Token
       id: generate-token
       uses: actions/create-github-app-token@v1
@@ -137,7 +107,7 @@ runs:
         # Dispatch Inputs (Mapped automatically by dispatch_and_wait.py)
         INPUT_REPO: ${{ steps.prepare-inputs.outputs.caller_repo }}
         INPUT_STACK_FILE: ${{ inputs.stack-file }}
-        INPUT_STACK_NAME: ${{ steps.resolve-stack.outputs.stack_name }}
+        INPUT_STACK_NAME: ${{ inputs.stack-name }}
         INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_ENV: ${{ inputs.env }}
       run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
@@ -149,7 +119,7 @@ runs:
         cat <<EOF >> "$GITHUB_STEP_SUMMARY"
         ### Target Deployment Summary
         - **Target Repository:** \`${{ inputs.target-repo }}\`
-        - **Stack Name:** \`${{ steps.resolve-stack.outputs.stack_name }}\`
+        - **Stack Name:** \`${{ inputs.stack-name }}\`
         - **Environment:** \`${{ inputs.env }}\`
         - **Caller Branch:** \`${{ inputs.branch }}\`
         - **[View Target Workflow Execution Logs](${{ env.TARGET_RUN_URL }})**
