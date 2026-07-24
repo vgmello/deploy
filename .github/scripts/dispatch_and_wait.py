@@ -15,14 +15,12 @@ TOKEN = os.environ["GH_TOKEN"]
 target_inputs = {}
 for env_key, env_value in os.environ.items():
     if env_key.startswith("INPUT_"):
-        # Converts 'INPUT_STACK_FILE' -> 'stack_file'
         input_name = env_key.replace("INPUT_", "").lower()
         target_inputs[input_name] = env_value
 
 print(f"Target: {OWNER}/{REPO} -> {WORKFLOW_ID} (Branch: {BRANCH})")
 print(f"Workflow Inputs: {target_inputs}")
 
-# Setup API URL and Headers
 url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/workflows/{WORKFLOW_ID}/dispatches"
 headers = {
     "Accept": "application/vnd.github+json",
@@ -46,7 +44,7 @@ try:
     with urllib.request.urlopen(dispatch_req) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 except urllib.error.HTTPError as e:
-    print(f"HTTP Error {e.code}: {e.read().decode('utf-8')}")
+    print(f"::error::HTTP Error {e.code}: {e.read().decode('utf-8')}")
     sys.exit(1)
 
 run_id = data["workflow_run_id"]
@@ -57,23 +55,31 @@ print(f"Run URL: {data.get('html_url', '')}")
 poll_url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/runs/{run_id}"
 poll_req = urllib.request.Request(poll_url, headers=headers)
 
+last_status = None
 while True:
     try:
         with urllib.request.urlopen(poll_req) as resp:
             run_data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        print(f"Status poll error: {e}")
+        print(f"Status poll warning ({e.code}), retrying in 10s...")
         time.sleep(10)
         continue
 
     status = run_data["status"]
     conclusion = run_data.get("conclusion")
-    print(f"Status: {status}...")
+
+    # Provide clear feedback when job is queued waiting for concurrency lock
+    if status != last_status:
+        if status == "queued":
+            print("Status: queued (waiting for concurrent deployment lock)...")
+        else:
+            print(f"Status: {status}...")
+        last_status = status
 
     if status == "completed":
         print(f"\nWorkflow finished with conclusion: {conclusion}")
         if conclusion != "success":
-            sys.exit(1)  # Fails the composite action step
+            sys.exit(1)
         break
 
     time.sleep(10)
