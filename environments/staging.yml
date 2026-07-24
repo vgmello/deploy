@@ -15,7 +15,8 @@ network:
 acr:
   login_server: acrplatformstaging.azurecr.io
   resource_group: rg-platform-staging
-terraform_state:
+state_backend:
+  type: azurerm
   resource_group: rg-tfstate
   storage_account: sttfstatestaging
   container: tfstate

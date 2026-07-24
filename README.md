@@ -42,6 +42,7 @@ jobs:
 ```
 
 Full manifest reference and onboarding steps: [docs/usage.md](docs/usage.md).
+The trust & identity model — three deploy identities, self/delegated modes, state backends (design implemented and tested; workflow wiring pending): [docs/trust-modes.md](docs/trust-modes.md).
 
 ## What's in this repo
 

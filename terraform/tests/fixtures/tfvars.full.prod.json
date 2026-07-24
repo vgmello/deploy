@@ -88,7 +88,8 @@
         "login_server": "acrplatformdev.azurecr.io",
         "resource_group": "rg-platform-dev"
       },
-      "terraform_state": {
+      "state_backend": {
+        "type": "azurerm",
         "resource_group": "rg-tfstate",
         "storage_account": "sttfstatedev",
         "container": "tfstate"
