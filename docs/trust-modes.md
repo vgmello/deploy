@@ -123,7 +123,7 @@ pieces are not implemented yet:
   `azure/login` and one main-stack apply. They do not yet run
   `login-plan`, the bootstrap→plan→apply login sequence, or `--stack bootstrap`.
 - **Delegated dispatch** — the full round-trip exists: the trigger side
-  (`.github/actions/cloudapp-dispatch-workflow` + `dispatch_and_wait.py`) and the
+  (`.github/actions/cloud-app` + `dispatch_and_wait.py`) and the
   target side (`.github/workflows/cloud-app.yml` → `deploy-stack`, which checks
   out the central repo and the caller repo, runs the stack-ownership gate
   (`validate_and_lock.py`), then parse→resolve→terraform-deploy). Caller

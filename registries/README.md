@@ -40,7 +40,7 @@ An app repo triggers a delegated deploy with the dispatch action:
 
 ```yaml
 - name: Deploy Staging Stack
-  uses: <owner>/cloud-app/.github/actions/cloudapp-dispatch-workflow@main
+  uses: <owner>/deploy/.github/actions/cloud-app@main
   with:
     app-id: ${{ vars.APP_ID }}
     app-private-key: ${{ secrets.APP_PRIVATE_KEY }}

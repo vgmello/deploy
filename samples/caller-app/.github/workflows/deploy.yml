@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deploy to control plane
-        uses: vgmello/deploy/.github/actions/cloudapp-dispatch-workflow@main
+        uses: vgmello/deploy/.github/actions/cloud-app@main
         with:
           app-id: ${{ vars.DEPLOY_APP_ID }}
           app-private-key: ${{ secrets.DEPLOY_APP_KEY }}

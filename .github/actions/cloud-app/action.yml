@@ -1,5 +1,5 @@
-name: 'cloudapp-dispatch-workflow'
-description: 'Generates GitHub App Token, dispatches target workflow with repo, stack-file, stack-name, branch, and env parameters.'
+name: 'cloud-app'
+description: 'The action an app repo uses to deploy: generates a GitHub App token, then dispatches and waits on the control-plane deploy for one stack + environment.'
 
 inputs:
   app-id:
