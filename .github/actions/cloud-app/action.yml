@@ -19,7 +19,7 @@ inputs:
     required: false
     default: 'cloud-app.yml'
   stack-name:
-    description: 'Stack name. Defaults to the top-level `name:` read from the stack file (requires the caller repo to be checked out first).'
+    description: 'Stack name. When omitted, the action checks out the caller repo and reads the top-level `name:` from the stack file.'
     required: false
     default: ''
   branch:
@@ -87,12 +87,28 @@ runs:
         fi
         echo "caller_repo=$CALLER_REPO" >> "$GITHUB_OUTPUT"
 
-        # 3. Resolve Stack Name (Defaults to top-level `name:` in the stack file)
+        # 3. When stack-name is not provided we derive it from the manifest, so
+        #    the caller repo must be on disk — the next step checks it out.
+        if [ -z "${{ inputs.stack-name }}" ]; then
+          echo "checkout_needed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "checkout_needed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Checkout caller repo (to read the stack name)
+      if: steps.prepare-inputs.outputs.checkout_needed == 'true'
+      uses: actions/checkout@v4
+
+    - name: Resolve stack name
+      id: resolve-stack
+      shell: bash
+      run: |
+        # Default stack-name to the top-level `name:` in the stack file.
         STACK_NAME="${{ inputs.stack-name }}"
         if [ -z "$STACK_NAME" ]; then
           STACK_FILE="${{ inputs.stack-file }}"
           if [ ! -f "$STACK_FILE" ]; then
-            echo "::error::stack-name not set and manifest '$STACK_FILE' is not in the workspace. Check out your repo before this action (actions/checkout), or pass stack-name explicitly."
+            echo "::error::manifest '$STACK_FILE' not found after checkout; cannot derive stack-name. Pass stack-name explicitly."
             exit 1
           fi
           # First top-level `name:`; drop inline comment and surrounding quotes/space.
@@ -128,7 +144,7 @@ runs:
         # Dispatch Inputs (Mapped automatically by dispatch_and_wait.py)
         INPUT_REPO: ${{ steps.prepare-inputs.outputs.caller_repo }}
         INPUT_STACK_FILE: ${{ inputs.stack-file }}
-        INPUT_STACK_NAME: ${{ steps.prepare-inputs.outputs.stack_name }}
+        INPUT_STACK_NAME: ${{ steps.resolve-stack.outputs.stack_name }}
         INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_ENV: ${{ inputs.env }}
       run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
@@ -140,7 +156,7 @@ runs:
         cat <<EOF >> "$GITHUB_STEP_SUMMARY"
         ### Target Deployment Summary
         - **Target Repository:** \`${{ inputs.target-repo }}\`
-        - **Stack Name:** \`${{ steps.prepare-inputs.outputs.stack_name }}\`
+        - **Stack Name:** \`${{ steps.resolve-stack.outputs.stack_name }}\`
         - **Environment:** \`${{ inputs.env }}\`
         - **Caller Branch:** \`${{ inputs.branch }}\`
         - **[View Target Workflow Execution Logs](${{ env.TARGET_RUN_URL }})**
