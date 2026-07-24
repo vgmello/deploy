@@ -90,6 +90,7 @@ runs:
     # step assumes the job has already authenticated to the state backend and
     # resource plane.
     - name: Terraform deploy
+      id: deploy
       shell: bash
       env:
         PYTHONPATH: central-workspace
@@ -102,3 +103,49 @@ runs:
         --environment "${{ inputs.environment }}"
         --platform-file "central-workspace/environments/${{ inputs.environment }}.yml"
         ${{ inputs.plan-only == 'true' && '--plan-only' || '' }}
+
+    # Capture results even when a step above failed, so the caller always gets a
+    # plan, the terraform outputs, and a status summary.
+    - name: Collect deployment outputs
+      if: always()
+      shell: bash
+      env:
+        STACK_NAME: ${{ inputs.stack-name }}
+        TARGET_ENV: ${{ inputs.environment }}
+        DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+      run: |
+        mkdir -p outputs
+        TF_DIR=central-workspace/terraform
+
+        # tf plan text (present after the deploy step planned)
+        if [ -f "$TF_DIR/tfplan" ]; then
+          terraform -chdir="$TF_DIR" show -no-color tfplan > outputs/tf-plan.txt 2>/dev/null || true
+        fi
+
+        # tf outputs (only present after a successful apply)
+        terraform -chdir="$TF_DIR" output -json > outputs/tf-outputs.json 2>/dev/null \
+          || echo '{}' > outputs/tf-outputs.json
+
+        # first app FQDN as the deployment URL, if the apply produced one
+        FQDN=$(jq -r '(.app_fqdns.value // {}) | to_entries | (.[0].value // "")' outputs/tf-outputs.json 2>/dev/null || echo "")
+        URL=""
+        [ -n "$FQDN" ] && URL="https://$FQDN"
+
+        jq -n \
+          --arg stack "$STACK_NAME" \
+          --arg env "$TARGET_ENV" \
+          --arg url "$URL" \
+          --arg at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --arg status "${DEPLOY_OUTCOME:-unknown}" \
+          '{stack_name: $stack, environment: $env, deployment_url: $url, deployed_at: $at, status: $status}' \
+          > outputs/deployment-results.json
+
+        echo "### Deployment: $STACK_NAME ($TARGET_ENV) — ${DEPLOY_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload deployment outputs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-outputs-${{ github.run_id }}
+        path: outputs/
+        retention-days: 1
