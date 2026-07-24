@@ -50,6 +50,15 @@ jobs:
       - name: Terraform tests
         run: terraform -chdir=terraform test
 
+      - name: Bootstrap stacks (fmt, validate, test)
+        run: |
+          for dir in bootstrap terraform/bootstrap; do
+            terraform -chdir="$dir" fmt -check -recursive
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            terraform -chdir="$dir" test
+          done
+
       - uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: v0.53.0
