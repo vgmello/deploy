@@ -6,11 +6,28 @@ import os
 import sys
 from pathlib import Path
 
-from . import backend, builds, dockerbuild, gha, manifest, resolve, runner, secrets, tfdeploy
+from . import (
+    backend,
+    builds,
+    dispatch,
+    dockerbuild,
+    gha,
+    identity,
+    manifest,
+    resolve,
+    runner,
+    secrets,
+    tfdeploy,
+)
+from .yamlcompat import load_yaml
 
 
 def _load_json(path):
     return json.loads(Path(path).read_text())
+
+
+def _load_platform(path):
+    return load_yaml(Path(path).read_text())
 
 
 def _write_json(path, data):
@@ -79,6 +96,28 @@ def cmd_terraform_deploy(args):
     gha.write_outputs({"summary": summary})
 
 
+def cmd_login_plan(args):
+    phases = identity.login_plan(args.event, backend.backend_type(args.platform_file))
+    print(json.dumps(phases))
+
+
+def cmd_bootstrap_vars(args):
+    platform = _load_platform(args.platform_file)
+    out = {
+        "name": args.name,
+        "environment": args.environment,
+        "subscription_id": platform["subscription_id"],
+        "location": platform["location"],
+        "plan_subjects": identity.federation_subjects(
+            "plan", args.mode, args.app_repo, args.central_repo, args.environment
+        ),
+        "apply_subjects": identity.federation_subjects(
+            "apply", args.mode, args.app_repo, args.central_repo, args.environment
+        ),
+    }
+    print(json.dumps(out))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="cloudapp")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -128,11 +167,26 @@ def main(argv=None):
     p.add_argument("--targets", default="")
     p.set_defaults(func=cmd_terraform_deploy)
 
+    p = sub.add_parser("login-plan")
+    p.add_argument("--event", required=True)
+    p.add_argument("--platform-file", required=True)
+    p.set_defaults(func=cmd_login_plan)
+
+    p = sub.add_parser("bootstrap-vars")
+    p.add_argument("--name", required=True)
+    p.add_argument("--environment", required=True)
+    p.add_argument("--mode", required=True)
+    p.add_argument("--app-repo", required=True)
+    p.add_argument("--central-repo", required=True)
+    p.add_argument("--platform-file", required=True)
+    p.set_defaults(func=cmd_bootstrap_vars)
+
     args = parser.parse_args(argv)
     try:
         args.func(args)
     except (manifest.ManifestError, resolve.ResolveError, secrets.SyncError,
-            tfdeploy.DeployError, backend.BackendError) as exc:
+            tfdeploy.DeployError, backend.BackendError, dispatch.DispatchError,
+            ValueError) as exc:
         gha.error(str(exc))
         return 1
     return 0

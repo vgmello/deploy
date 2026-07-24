@@ -145,3 +145,36 @@ def test_sync_secrets_command_no_secrets(tmp_path, monkeypatch):
     assert rc == 0
     assert "secret-count=0" in gh.read_text()
 
+
+
+def test_login_plan_command_emits_phases(capsys):
+    from conftest import ENVDIR
+    rc = cli.main(["login-plan", "--event", "default_branch", "--platform-file", str(ENVDIR / "dev.yml")])
+    assert rc == 0
+    phases = json.loads(capsys.readouterr().out)
+    assert [p["identity"] for p in phases] == ["bootstrap", "plan", "apply"]
+
+
+def test_bootstrap_vars_command_delegated_uses_central_subjects(capsys):
+    from conftest import ENVDIR
+    rc = cli.main([
+        "bootstrap-vars", "--name", "orders-api", "--environment", "prod",
+        "--mode", "delegated", "--app-repo", "acme/orders",
+        "--central-repo", "vgmello/deploy", "--platform-file", str(ENVDIR / "dev.yml"),
+    ])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["plan_subjects"] == ["repo:vgmello/deploy:environment:prod-plan"]
+    assert out["apply_subjects"] == ["repo:vgmello/deploy:environment:prod"]
+    assert out["name"] == "orders-api"
+
+
+def test_bootstrap_vars_bad_mode_returns_nonzero(capsys):
+    from conftest import ENVDIR
+    rc = cli.main([
+        "bootstrap-vars", "--name", "x", "--environment", "dev",
+        "--mode", "trustme", "--app-repo", "a/b", "--central-repo", "c/d",
+        "--platform-file", str(ENVDIR / "dev.yml"),
+    ])
+    assert rc == 1
+    assert "::error::" in capsys.readouterr().out
