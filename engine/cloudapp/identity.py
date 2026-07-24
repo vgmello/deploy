@@ -33,14 +33,14 @@ def federation_subjects(mi, mode, app_repo, central_repo, env):
         raise ValueError(f"unknown deploy identity '{mi}'")
     _validate(app_repo, central_repo, env)
 
-    if mode == "self":
-        if mi == "plan":
-            return [f"repo:{app_repo}:pull_request", f"repo:{app_repo}:environment:{env}"]
-        return [f"repo:{app_repo}:environment:{env}"]
-    # delegated: only the central repo's subjects, never the app repo
+    # Split topology: the caller runs the resource deploy under the RG-scoped
+    # plan/apply identities, so both modes federate plan/apply to the app
+    # (caller) repo. Only the bootstrap identity (minted in the control repo, and
+    # not one of DEPLOY_IDENTITIES) is federated to the control repo. central_repo
+    # is retained for validation/compatibility but no longer appears in a subject.
     if mi == "plan":
-        return [f"repo:{central_repo}:environment:{env}-plan"]
-    return [f"repo:{central_repo}:environment:{env}"]
+        return [f"repo:{app_repo}:pull_request", f"repo:{app_repo}:environment:{env}"]
+    return [f"repo:{app_repo}:environment:{env}"]
 
 
 def login_plan(event, backend_type):

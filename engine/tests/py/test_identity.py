@@ -20,26 +20,28 @@ def test_self_mode_apply_subject_is_environment_only():
     assert subs == ["repo:acme/orders:environment:prod"]
 
 
-def test_delegated_mode_plan_uses_central_plan_environment():
+def test_delegated_mode_plan_federates_to_caller():
     subs = identity.federation_subjects(
         "plan", "delegated", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
     )
-    assert subs == ["repo:vgmello/cloud-app:environment:prod-plan"]
+    assert subs == ["repo:acme/orders:pull_request", "repo:acme/orders:environment:prod"]
 
 
-def test_delegated_mode_apply_uses_central_environment():
+def test_delegated_mode_apply_federates_to_caller():
     subs = identity.federation_subjects(
         "apply", "delegated", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
     )
-    assert subs == ["repo:vgmello/cloud-app:environment:prod"]
+    assert subs == ["repo:acme/orders:environment:prod"]
 
 
-def test_delegated_mode_never_references_app_repo():
+def test_delegated_mode_never_references_central_repo():
+    # Split topology: the caller runs plan/apply, so those identities federate to
+    # the app repo and never to the control repo.
     for mi in ("plan", "apply"):
         subs = identity.federation_subjects(
             mi, "delegated", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
         )
-        assert all("acme/orders" not in s for s in subs)
+        assert all("vgmello/cloud-app" not in s for s in subs)
 
 
 def test_unknown_mode_or_mi_fails():

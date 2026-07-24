@@ -48,28 +48,34 @@ Per tool+environment:
 `python3 -m cloudapp login-plan --event <event> --platform-file <file>` emits
 the exact ordered phases the workflow runs.
 
-## Self vs delegated
+## Split topology: control bootstraps, caller deploys
 
-The reusable workflow takes a `mode` input (default `delegated`).
+The delegated deploy is split across two execution contexts by privilege:
 
-- **self** — the app repo runs the deploy in its own workflow; the identities'
-  federated credentials trust the app repo's OIDC subjects.
-- **delegated** — the app repo only dispatches to the central deploy repo,
-  which runs the identical deploy under _its_ OIDC subject. The app repo never
-  holds federation to the powerful identities.
+- **Bootstrap (control repo).** The app repo dispatches the control repo
+  (`vgmello/cloud-app`), which runs the subscription-scoped bootstrap under its
+  own OIDC — creating the resource group and the per-RG plan/apply identities,
+  and federating those identities to the **caller** repo's OIDC subjects. The
+  powerful, subscription-level step never leaves the control repo.
+- **Resource deploy (caller repo).** The caller then runs the actual deploy
+  (plan/apply of the main stack) in its own workflow, under the RG-scoped
+  plan/apply identities bootstrap just minted for it. The caller only ever holds
+  RG-scoped power (Reader for plan, Contributor for apply on its own RG) — never
+  subscription scope.
 
-Federated-credential subjects (written onto the identities by the per-tool
+Federated-credential subjects (written onto the per-tool identities by the
 bootstrap stack, sourced from `cloudapp.identity.federation_subjects`):
 
-| Identity  | self mode                                                 | delegated mode                               |
-| --------- | --------------------------------------------------------- | -------------------------------------------- |
-| plan      | `repo:<app>:pull_request`, `repo:<app>:environment:<env>` | `repo:vgmello/cloud-app:environment:<env>-plan` |
-| apply     | `repo:<app>:environment:<env>`                            | `repo:vgmello/cloud-app:environment:<env>`      |
-| bootstrap | `repo:<trusted>:environment:<env>`                        | same                                         |
+| Identity  | Federated subject                                         |
+| --------- | --------------------------------------------------------- |
+| plan      | `repo:<app>:pull_request`, `repo:<app>:environment:<env>` |
+| apply     | `repo:<app>:environment:<env>`                            |
+| bootstrap | `repo:vgmello/cloud-app:environment:<env>` (control repo) |
 
-The subject is the security boundary: a delegated app repo cannot mint an OIDC
-token matching the identities' federated subjects, so it cannot assume plan or
-apply — only the central repo's runner can. GitHub environment required
+The security boundary is scope, not location: the caller can assume plan/apply,
+but only for its own resource group. It can never assume the bootstrap identity
+(federated to the control repo) and so can never create resource groups,
+identities, or role assignments at the subscription. GitHub environment required
 reviewers on `environment:<env>` remain the apply approval gate.
 
 ## State backends (Azure Blob or AWS S3)

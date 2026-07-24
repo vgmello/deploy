@@ -155,7 +155,7 @@ def test_login_plan_command_emits_phases(capsys):
     assert [p["identity"] for p in phases] == ["bootstrap", "plan", "apply"]
 
 
-def test_bootstrap_vars_command_delegated_uses_central_subjects(capsys):
+def test_bootstrap_vars_command_delegated_federates_to_caller(capsys):
     from conftest import ENVDIR
     rc = cli.main([
         "bootstrap-vars", "--name", "orders-api", "--environment", "prod",
@@ -164,8 +164,8 @@ def test_bootstrap_vars_command_delegated_uses_central_subjects(capsys):
     ])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["plan_subjects"] == ["repo:vgmello/cloud-app:environment:prod-plan"]
-    assert out["apply_subjects"] == ["repo:vgmello/cloud-app:environment:prod"]
+    assert out["plan_subjects"] == ["repo:acme/orders:pull_request", "repo:acme/orders:environment:prod"]
+    assert out["apply_subjects"] == ["repo:acme/orders:environment:prod"]
     assert out["name"] == "orders-api"
 
 
