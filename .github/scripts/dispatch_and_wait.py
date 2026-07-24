@@ -59,9 +59,34 @@ print(f"Run URL: {data.get('html_url', '')}")
 # 2. Poll Status
 poll_url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/runs/{run_id}"
 poll_req = urllib.request.Request(poll_url, headers=headers)
+jobs_url = f"https://api.github.com/repos/{OWNER}/{REPO}/actions/runs/{run_id}/jobs"
+jobs_req = urllib.request.Request(jobs_url, headers=headers)
+
+
+def stream_steps(seen):
+    """Print each target job step once as it starts and finishes. Best-effort:
+    the jobs API lagging or erroring must not interrupt polling."""
+    try:
+        with urllib.request.urlopen(jobs_req) as resp:
+            jobs_data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return
+    for job in jobs_data.get("jobs", []):
+        for step in job.get("steps", []):
+            key = f"{job['id']}_{step['name']}_{step['status']}"
+            if key in seen:
+                continue
+            seen.add(key)
+            if step["status"] == "in_progress":
+                print(f"  Running step: {step['name']}...")
+            elif step["status"] == "completed":
+                mark = "ok" if step.get("conclusion") == "success" else "FAILED"
+                print(f"  [{mark}] {step['name']}")
+
 
 last_status = None
 poll_failures = 0
+seen_steps = set()
 while True:
     try:
         with urllib.request.urlopen(poll_req) as resp:
@@ -91,8 +116,12 @@ while True:
             print(f"Status: {status}...")
         last_status = status
 
+    # Stream individual step transitions from the target run.
+    stream_steps(seen_steps)
+
     if status == "completed":
-        print(f"\nWorkflow finished with conclusion: {conclusion}")
+        print(f"\nTarget workflow complete: {(conclusion or 'unknown').upper()}")
+        print(f"View logs: {run_data.get('html_url', '')}")
         if conclusion != "success":
             sys.exit(1)
         break
