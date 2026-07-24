@@ -121,9 +121,14 @@ pieces are not implemented yet:
 - **`deploy.yml` phase handoff** — the four deploy jobs still do one
   `azure/login` and one main-stack apply. They do not yet run
   `login-plan`, the bootstrap→plan→apply login sequence, or `--stack bootstrap`.
-- **Delegated dispatch** — no `repository_dispatch` entry job exists, and the
-  `dispatch.authorize` allowlist is defined in code but has no config file and
-  is never called. The `delegated` mode is therefore not enforceable yet.
+- **Delegated dispatch** — the trigger side exists
+  (`.github/actions/cloudapp-dispatch-workflow` + `dispatch_and_wait.py`) and the
+  target side exists (`.github/workflows/cloud-app.yml` → `deploy-stack` action,
+  which checks out the caller repo and runs parse→resolve→terraform-deploy). Two
+  gaps remain: `deploy-stack` does not yet perform the OIDC login as the
+  plan/apply identity (it assumes the job is already authenticated), and the
+  `dispatch.authorize` allowlist is defined in code but has no config file and is
+  never called, so an unlisted caller is not yet rejected.
 - **State-container role assignments** — the data-plane grants described above
   are not created by any committed stack.
 - **Bootstrap role ABAC** — the bootstrap role assignment constrains

@@ -1,0 +1,83 @@
+name: 'deploy-stack'
+description: 'Check out a caller repo''s stack manifest and deploy it through the cloudapp pipeline for one environment.'
+
+inputs:
+  caller-repo:
+    description: 'Caller repository name (under the same owner as this repo)'
+    required: true
+  stack-file:
+    description: 'Manifest path within the caller repo'
+    required: false
+    default: 'cloud-app.yml'
+  stack-name:
+    description: 'Stack name (state key prefix); must match the manifest name'
+    required: true
+  caller-branch:
+    description: 'Ref of the caller repo to deploy'
+    required: false
+    default: 'main'
+  environment:
+    description: 'Target environment'
+    required: false
+    default: 'dev'
+  github-token:
+    description: 'Token scoped to the caller repo (used to check it out)'
+    required: true
+  plan-only:
+    description: 'Plan without applying'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout caller repo
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository_owner }}/${{ inputs.caller-repo }}
+        ref: ${{ inputs.caller-branch }}
+        token: ${{ inputs.github-token }}
+        path: caller
+
+    - name: Install cloudapp dependencies
+      shell: bash
+      run: python3 -m pip install --user -q -r "${{ github.workspace }}/requirements.txt"
+
+    - name: Parse manifest
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: >-
+        python3 -m cloudapp parse-manifest
+        --manifest "caller/${{ inputs.stack-file }}"
+        --output-dir .cloud-app
+        --app-root caller
+
+    - name: Resolve config
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: >-
+        python3 -m cloudapp resolve-config
+        --tool-json ".cloud-app/tool.${{ inputs.environment }}.json"
+        --platform-file "environments/${{ inputs.environment }}.yml"
+        --environment "${{ inputs.environment }}"
+        --out-file tfvars.json
+
+    # NOTE: Azure/AWS OIDC login for the plan/apply identity is the pending
+    # trust-identity wiring (see docs/trust-modes.md, "Not yet wired"); this
+    # step assumes the job has already authenticated to the state backend and
+    # resource plane.
+    - name: Terraform deploy
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: >-
+        python3 -m cloudapp terraform-deploy
+        --terraform-dir terraform
+        --tfvars-file tfvars.json
+        --tool-json ".cloud-app/tool.${{ inputs.environment }}.json"
+        --tool-name "${{ inputs.stack-name }}"
+        --environment "${{ inputs.environment }}"
+        --platform-file "environments/${{ inputs.environment }}.yml"
+        ${{ inputs.plan-only == 'true' && '--plan-only' || '' }}
