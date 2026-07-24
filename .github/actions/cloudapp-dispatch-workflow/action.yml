@@ -1,5 +1,5 @@
 name: 'cloudapp-dispatch-workflow'
-description: 'Generates GitHub App Token, dispatches target workflow with repo, stack-file, branch, and env parameters.'
+description: 'Generates GitHub App Token, dispatches target workflow with repo, stack-file, stack-name, branch, and env parameters.'
 
 inputs:
   app-id:
@@ -18,6 +18,10 @@ inputs:
     description: 'Stack file parameter to pass to target workflow (Defaults to "cloud-app.yml")'
     required: false
     default: 'cloud-app.yml'
+  stack-name:
+    description: 'Target stack name declared inside the stack YAML file (Defaults to "cloud-app")'
+    required: false
+    default: 'cloud-app'
   branch:
     description: 'Branch to checkout on target repository'
     required: false
@@ -66,7 +70,6 @@ runs:
         fi
         echo "caller_repo=$CALLER_REPO" >> "$GITHUB_OUTPUT"
 
-    # Generate short-lived token using GitHub App credentials
     - name: Generate GitHub App Token
       id: generate-token
       uses: actions/create-github-app-token@v1
@@ -76,7 +79,6 @@ runs:
         owner: ${{ steps.prepare-inputs.outputs.owner }}
         repositories: ${{ inputs.target-repo }}
 
-    # Run Python script
     - name: Trigger and Poll Target Workflow
       shell: bash
       env:
@@ -86,9 +88,10 @@ runs:
         TARGET_WORKFLOW: ${{ inputs.target-workflow }}
         TARGET_BRANCH: ${{ inputs.target-branch }}
 
-        # Explicit Workflow Inputs (Mapped automatically by dispatch_and_wait.py)
+        # Dispatch Inputs (Mapped automatically by dispatch_and_wait.py)
         INPUT_REPO: ${{ steps.prepare-inputs.outputs.caller_repo }}
         INPUT_STACK_FILE: ${{ inputs.stack-file }}
+        INPUT_STACK_NAME: ${{ inputs.stack-name }}
         INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_ENV: ${{ inputs.env }}
       run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
