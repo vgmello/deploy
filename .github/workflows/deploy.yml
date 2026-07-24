@@ -1,5 +1,11 @@
 name: deploy
-# Reusable deployment workflow: app repos call this with `uses:` and `secrets: inherit`.
+# Reusable caller-side deploy (Phase 2 of the split model). App repos call this
+# with `uses:` + `secrets: inherit`. It deploys ONE environment; the bootstrap
+# (RG + plan/apply identities) runs in the control repo — see cloud-app.yml.
+#
+# NOTE: authentication still uses the single `deploy.client_id` per environment.
+# Switching plan/apply to the RG-scoped identities minted by bootstrap is the
+# next phase of the split-topology work.
 
 on:
   workflow_call:
@@ -8,15 +14,20 @@ on:
         description: Path to the cloud-app manifest in the app repo
         type: string
         default: .cloud-app.yml
-      environment:
-        description: Deploy a single environment only (empty = full chain)
+      env:
+        description: Target environment to deploy
         type: string
-        default: ""
+        required: true
       plan_only:
         description: Plan without applying
         type: boolean
         default: false
-      deploy_ref:
+      stack_name:
+        description: Stack name (state key / lock key); must match the manifest name
+        type: string
+        required: true
+        default: cloud-app
+      repo_ref:
         description: Ref of vgmello/cloud-app to use
         type: string
         default: main
@@ -26,7 +37,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-${{ github.repository }}-${{ inputs.plan_only && 'plan' || 'apply' }}
+  group: deploy-${{ github.repository }}-${{ inputs.env }}-${{ inputs.plan_only && 'plan' || 'apply' }}
   cancel-in-progress: false
 
 jobs:
@@ -37,7 +48,6 @@ jobs:
       contents: read
     outputs:
       name: ${{ steps.parse.outputs.name }}
-      environments: ${{ steps.parse.outputs.environments }}
       docker: ${{ steps.parse.outputs.docker }}
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: vgmello/cloud-app
-          ref: ${{ inputs.deploy_ref }}
+          ref: ${{ inputs.repo_ref }}
           path: .deploy
 
       - id: parse
@@ -55,25 +65,21 @@ jobs:
           output-dir: .cloud-app
           app-root: "."
 
-      - shell: bash
+      - name: Validate target environment is declared
+        shell: bash
         env:
           ENVIRONMENTS: ${{ steps.parse.outputs.environments }}
-          ENV_FILTER: ${{ inputs.environment }}
+          ENV: ${{ inputs.env }}
         run: |
-          COUNT=$(echo "$ENVIRONMENTS" | jq 'length')
-          if [ "$COUNT" -gt 4 ]; then
-            echo "::error::at most 4 environments are supported (manifest declares $COUNT)"
-            exit 1
-          fi
-          if [ -n "$ENV_FILTER" ] && ! echo "$ENVIRONMENTS" | jq -e --arg e "$ENV_FILTER" 'index($e)' > /dev/null; then
-            echo "::error::environment '$ENV_FILTER' is not declared in the manifest ($(echo "$ENVIRONMENTS" | jq -r 'join(", ")'))"
+          if ! echo "$ENVIRONMENTS" | jq -e --arg e "$ENV" 'index($e)' > /dev/null; then
+            echo "::error::environment '$ENV' is not declared in the manifest ($(echo "$ENVIRONMENTS" | jq -r 'join(", ")'))"
             exit 1
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: cloud-app-config
-          path: .cloud-app/tool.*.json
+          path: .cloud-app/tool.${{ inputs.env }}.json
 
   build:
     needs: setup
@@ -91,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: vgmello/cloud-app
-          ref: ${{ inputs.deploy_ref }}
+          ref: ${{ inputs.repo_ref }}
           path: .deploy
 
       - uses: actions/download-artifact@v4
@@ -99,15 +105,13 @@ jobs:
           name: cloud-app-config
           path: .cloud-app
 
-      # Build once against the first environment's config: docker settings must
-      # not vary per env, and the ACR is assumed shared across environments.
-      - id: env0
+      - id: platform
         shell: bash
+        env:
+          DEPLOY_ENV: ${{ inputs.env }}
         run: |
-          FIRST=$(echo '${{ needs.setup.outputs.environments }}' | jq -r '.[0]')
-          FILE=".deploy/environments/$FIRST.yml"
+          FILE=".deploy/environments/$DEPLOY_ENV.yml"
           {
-            echo "name=$FIRST"
             echo "registry=$(yq '.acr.login_server' "$FILE")"
             echo "client_id=$(yq '.deploy.client_id' "$FILE")"
             echo "tenant_id=$(yq '.tenant_id' "$FILE")"
@@ -116,349 +120,37 @@ jobs:
 
       - uses: azure/login@v2
         with:
-          client-id: ${{ steps.env0.outputs.client_id }}
-          tenant-id: ${{ steps.env0.outputs.tenant_id }}
-          subscription-id: ${{ steps.env0.outputs.subscription_id }}
+          client-id: ${{ steps.platform.outputs.client_id }}
+          tenant-id: ${{ steps.platform.outputs.tenant_id }}
+          subscription-id: ${{ steps.platform.outputs.subscription_id }}
 
       - id: build
         uses: ./.deploy/.github/actions/docker-build
         with:
-          tool-json: .cloud-app/tool.${{ steps.env0.outputs.name }}.json
+          tool-json: .cloud-app/tool.${{ inputs.env }}.json
           tool-name: ${{ needs.setup.outputs.name }}
-          registry: ${{ steps.env0.outputs.registry }}
+          registry: ${{ steps.platform.outputs.registry }}
           git-sha: ${{ github.sha }}
 
-  deploy-0:
+  deploy:
     needs: [setup, build]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[0] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[0]) }}
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
     environment:
-      name: ${{ fromJSON(needs.setup.outputs.environments)[0] }}
+      name: ${{ inputs.env }}
     env:
-      DEPLOY_ENV: ${{ fromJSON(needs.setup.outputs.environments)[0] }}
+      DEPLOY_ENV: ${{ inputs.env }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/checkout@v4
         with:
           repository: vgmello/cloud-app
-          ref: ${{ inputs.deploy_ref }}
-          path: .deploy
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cloud-app-config
-          path: .cloud-app
-
-      - id: platform
-        shell: bash
-        run: |
-          FILE=".deploy/environments/$DEPLOY_ENV.yml"
-          if [ ! -f "$FILE" ]; then
-            echo "::error::no platform config for environment '$DEPLOY_ENV' ($FILE missing)"
-            exit 1
-          fi
-          {
-            echo "file=$FILE"
-            echo "client_id=$(yq '.deploy.client_id' "$FILE")"
-            echo "tenant_id=$(yq '.tenant_id' "$FILE")"
-            echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
-            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
-            echo "keyvault=$KV"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ steps.platform.outputs.client_id }}
-          tenant-id: ${{ steps.platform.outputs.tenant_id }}
-          subscription-id: ${{ steps.platform.outputs.subscription_id }}
-
-      - id: resolve
-        uses: ./.deploy/.github/actions/resolve-config
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-config-dir: .deploy/environments
-          out-file: tfvars.json
-
-      - id: secrets
-        if: ${{ inputs.plan_only == false }}
-        uses: ./.deploy/.github/actions/sync-secrets
-        env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          keyvault-name: ${{ steps.platform.outputs.keyvault }}
-
-      - name: First-deploy targeted apply (key vault before secrets)
-        if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
-        uses: ./.deploy/.github/actions/terraform-deploy
-        with:
-          terraform-dir: .deploy/terraform/azure
-          tfvars-file: tfvars.json
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          tool-name: ${{ needs.setup.outputs.name }}
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-file: ${{ steps.platform.outputs.file }}
-          targets: module.keyvault
-
-      - name: Sync secrets after vault creation
-        if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
-        uses: ./.deploy/.github/actions/sync-secrets
-        env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          keyvault-name: ${{ steps.platform.outputs.keyvault }}
-          require-vault: "true"
-
-      - id: deploy
-        uses: ./.deploy/.github/actions/terraform-deploy
-        with:
-          terraform-dir: .deploy/terraform/azure
-          tfvars-file: tfvars.json
-          image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          tool-name: ${{ needs.setup.outputs.name }}
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-file: ${{ steps.platform.outputs.file }}
-          plan-only: ${{ inputs.plan_only }}
-
-      - shell: bash
-        run: echo "### ${{ steps.deploy.outputs.summary }}" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-1:
-    needs: [setup, build, deploy-0]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[1] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[1]) && !(inputs.plan_only && inputs.environment == '') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      id-token: write
-    environment:
-      name: ${{ fromJSON(needs.setup.outputs.environments)[1] }}
-    env:
-      DEPLOY_ENV: ${{ fromJSON(needs.setup.outputs.environments)[1] }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/checkout@v4
-        with:
-          repository: vgmello/cloud-app
-          ref: ${{ inputs.deploy_ref }}
-          path: .deploy
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cloud-app-config
-          path: .cloud-app
-
-      - id: platform
-        shell: bash
-        run: |
-          FILE=".deploy/environments/$DEPLOY_ENV.yml"
-          if [ ! -f "$FILE" ]; then
-            echo "::error::no platform config for environment '$DEPLOY_ENV' ($FILE missing)"
-            exit 1
-          fi
-          {
-            echo "file=$FILE"
-            echo "client_id=$(yq '.deploy.client_id' "$FILE")"
-            echo "tenant_id=$(yq '.tenant_id' "$FILE")"
-            echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
-            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
-            echo "keyvault=$KV"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ steps.platform.outputs.client_id }}
-          tenant-id: ${{ steps.platform.outputs.tenant_id }}
-          subscription-id: ${{ steps.platform.outputs.subscription_id }}
-
-      - id: resolve
-        uses: ./.deploy/.github/actions/resolve-config
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-config-dir: .deploy/environments
-          out-file: tfvars.json
-
-      - id: secrets
-        if: ${{ inputs.plan_only == false }}
-        uses: ./.deploy/.github/actions/sync-secrets
-        env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          keyvault-name: ${{ steps.platform.outputs.keyvault }}
-
-      - name: First-deploy targeted apply (key vault before secrets)
-        if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
-        uses: ./.deploy/.github/actions/terraform-deploy
-        with:
-          terraform-dir: .deploy/terraform/azure
-          tfvars-file: tfvars.json
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          tool-name: ${{ needs.setup.outputs.name }}
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-file: ${{ steps.platform.outputs.file }}
-          targets: module.keyvault
-
-      - name: Sync secrets after vault creation
-        if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
-        uses: ./.deploy/.github/actions/sync-secrets
-        env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          keyvault-name: ${{ steps.platform.outputs.keyvault }}
-          require-vault: "true"
-
-      - id: deploy
-        uses: ./.deploy/.github/actions/terraform-deploy
-        with:
-          terraform-dir: .deploy/terraform/azure
-          tfvars-file: tfvars.json
-          image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          tool-name: ${{ needs.setup.outputs.name }}
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-file: ${{ steps.platform.outputs.file }}
-          plan-only: ${{ inputs.plan_only }}
-
-      - shell: bash
-        run: echo "### ${{ steps.deploy.outputs.summary }}" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-2:
-    needs: [setup, build, deploy-1]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[2] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[2]) && !(inputs.plan_only && inputs.environment == '') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      id-token: write
-    environment:
-      name: ${{ fromJSON(needs.setup.outputs.environments)[2] }}
-    env:
-      DEPLOY_ENV: ${{ fromJSON(needs.setup.outputs.environments)[2] }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/checkout@v4
-        with:
-          repository: vgmello/cloud-app
-          ref: ${{ inputs.deploy_ref }}
-          path: .deploy
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cloud-app-config
-          path: .cloud-app
-
-      - id: platform
-        shell: bash
-        run: |
-          FILE=".deploy/environments/$DEPLOY_ENV.yml"
-          if [ ! -f "$FILE" ]; then
-            echo "::error::no platform config for environment '$DEPLOY_ENV' ($FILE missing)"
-            exit 1
-          fi
-          {
-            echo "file=$FILE"
-            echo "client_id=$(yq '.deploy.client_id' "$FILE")"
-            echo "tenant_id=$(yq '.tenant_id' "$FILE")"
-            echo "subscription_id=$(yq '.subscription_id' "$FILE")"
-            PREFIX=$(yq '.naming_prefix // ""' "$FILE")
-            KV=$(python3 -c "import sys; n = ('kv-' + sys.argv[1] + sys.argv[2] + '-' + sys.argv[3])[:24]; print(n[:-1] if n.endswith('-') else n)" "$PREFIX" "${{ needs.setup.outputs.name }}" "$DEPLOY_ENV")
-            echo "keyvault=$KV"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ steps.platform.outputs.client_id }}
-          tenant-id: ${{ steps.platform.outputs.tenant_id }}
-          subscription-id: ${{ steps.platform.outputs.subscription_id }}
-
-      - id: resolve
-        uses: ./.deploy/.github/actions/resolve-config
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-config-dir: .deploy/environments
-          out-file: tfvars.json
-
-      - id: secrets
-        if: ${{ inputs.plan_only == false }}
-        uses: ./.deploy/.github/actions/sync-secrets
-        env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          keyvault-name: ${{ steps.platform.outputs.keyvault }}
-
-      - name: First-deploy targeted apply (key vault before secrets)
-        if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
-        uses: ./.deploy/.github/actions/terraform-deploy
-        with:
-          terraform-dir: .deploy/terraform/azure
-          tfvars-file: tfvars.json
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          tool-name: ${{ needs.setup.outputs.name }}
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-file: ${{ steps.platform.outputs.file }}
-          targets: module.keyvault
-
-      - name: Sync secrets after vault creation
-        if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
-        uses: ./.deploy/.github/actions/sync-secrets
-        env:
-          ALL_SECRETS: ${{ toJSON(secrets) }}
-        with:
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          keyvault-name: ${{ steps.platform.outputs.keyvault }}
-          require-vault: "true"
-
-      - id: deploy
-        uses: ./.deploy/.github/actions/terraform-deploy
-        with:
-          terraform-dir: .deploy/terraform/azure
-          tfvars-file: tfvars.json
-          image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
-          tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
-          tool-name: ${{ needs.setup.outputs.name }}
-          environment: ${{ env.DEPLOY_ENV }}
-          platform-file: ${{ steps.platform.outputs.file }}
-          plan-only: ${{ inputs.plan_only }}
-
-      - shell: bash
-        run: echo "### ${{ steps.deploy.outputs.summary }}" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-3:
-    needs: [setup, build, deploy-2]
-    if: ${{ !failure() && !cancelled() && fromJSON(needs.setup.outputs.environments)[3] != null && (inputs.environment == '' || inputs.environment == fromJSON(needs.setup.outputs.environments)[3]) && !(inputs.plan_only && inputs.environment == '') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      id-token: write
-    environment:
-      name: ${{ fromJSON(needs.setup.outputs.environments)[3] }}
-    env:
-      DEPLOY_ENV: ${{ fromJSON(needs.setup.outputs.environments)[3] }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/checkout@v4
-        with:
-          repository: vgmello/cloud-app
-          ref: ${{ inputs.deploy_ref }}
+          ref: ${{ inputs.repo_ref }}
           path: .deploy
 
       - uses: actions/download-artifact@v4
