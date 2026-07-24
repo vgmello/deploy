@@ -1,19 +1,9 @@
-# Sample caller workflow for an app repo (delegated deploy).
-#
-# Copy this into your app repo at .github/workflows/deploy.yml. It never holds
-# deploy credentials or Azure identity — it only dispatches to the central
-# control repo (vgmello/cloud-app), which runs the deploy under its own identity
-# after the stack-lock registry authorizes this repo.
-#
-# Required in this repo's settings:
-#   - vars.DEPLOY_APP_ID          GitHub App id (App installed on the control repo)
-#   - secrets.DEPLOY_APP_KEY      GitHub App private key (.pem contents)
 name: Deploy
 
 on:
   push:
-    branches: [main] # merge to main -> deploy dev automatically
-  workflow_dispatch: # manual run -> pick the environment
+    branches: [main]
+  workflow_dispatch:
     inputs:
       environment:
         description: Target environment
@@ -28,7 +18,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Check out this repo so the action can read the stack name from cloud-app.yml.
       - uses: actions/checkout@v4
 
       - name: Dispatch deploy to control plane
@@ -37,6 +26,3 @@ jobs:
           app-id: ${{ vars.DEPLOY_APP_ID }}
           app-private-key: ${{ secrets.DEPLOY_APP_KEY }}
           env: ${{ inputs.environment || 'dev' }}
-          # target-owner defaults to this repo's owner (same org as the control
-          # repo); stack-name is read from the top-level `name:` in cloud-app.yml.
-          # `repo` and `stack-file` default to this repo's name and cloud-app.yml.
