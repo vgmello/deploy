@@ -19,9 +19,9 @@ inputs:
     required: false
     default: 'cloud-app.yml'
   stack-name:
-    description: 'Target stack name declared inside the stack YAML file (Defaults to "cloud-app")'
+    description: 'Stack name. Defaults to the top-level `name:` read from the stack file (requires the caller repo to be checked out first).'
     required: false
-    default: 'cloud-app'
+    default: ''
   branch:
     description: 'Branch to checkout on target repository'
     required: false
@@ -87,6 +87,25 @@ runs:
         fi
         echo "caller_repo=$CALLER_REPO" >> "$GITHUB_OUTPUT"
 
+        # 3. Resolve Stack Name (Defaults to top-level `name:` in the stack file)
+        STACK_NAME="${{ inputs.stack-name }}"
+        if [ -z "$STACK_NAME" ]; then
+          STACK_FILE="${{ inputs.stack-file }}"
+          if [ ! -f "$STACK_FILE" ]; then
+            echo "::error::stack-name not set and manifest '$STACK_FILE' is not in the workspace. Check out your repo before this action (actions/checkout), or pass stack-name explicitly."
+            exit 1
+          fi
+          # First top-level `name:`; drop inline comment and surrounding quotes/space.
+          STACK_NAME=$(grep -m1 '^name:' "$STACK_FILE" \
+            | sed -e 's/^name:[[:space:]]*//' -e 's/[[:space:]]*#.*$//' \
+                  -e 's/^["'\'']//' -e 's/["'\'']$//' -e 's/[[:space:]]*$//')
+          if [ -z "$STACK_NAME" ]; then
+            echo "::error::could not read a top-level 'name:' from '$STACK_FILE'"
+            exit 1
+          fi
+        fi
+        echo "stack_name=$STACK_NAME" >> "$GITHUB_OUTPUT"
+
     - name: Generate GitHub App Token
       id: generate-token
       uses: actions/create-github-app-token@v1
@@ -109,7 +128,7 @@ runs:
         # Dispatch Inputs (Mapped automatically by dispatch_and_wait.py)
         INPUT_REPO: ${{ steps.prepare-inputs.outputs.caller_repo }}
         INPUT_STACK_FILE: ${{ inputs.stack-file }}
-        INPUT_STACK_NAME: ${{ inputs.stack-name }}
+        INPUT_STACK_NAME: ${{ steps.prepare-inputs.outputs.stack_name }}
         INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_ENV: ${{ inputs.env }}
       run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
@@ -121,7 +140,7 @@ runs:
         cat <<EOF >> "$GITHUB_STEP_SUMMARY"
         ### Target Deployment Summary
         - **Target Repository:** \`${{ inputs.target-repo }}\`
-        - **Stack Name:** \`${{ inputs.stack-name }}\`
+        - **Stack Name:** \`${{ steps.prepare-inputs.outputs.stack_name }}\`
         - **Environment:** \`${{ inputs.env }}\`
         - **Caller Branch:** \`${{ inputs.branch }}\`
         - **[View Target Workflow Execution Logs](${{ env.TARGET_RUN_URL }})**

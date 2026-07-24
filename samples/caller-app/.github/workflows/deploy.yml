@@ -28,14 +28,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Check out this repo so the action can read the stack name from cloud-app.yml.
+      - uses: actions/checkout@v4
+
       - name: Dispatch deploy to control plane
         uses: vgmello/cloud-app/.github/actions/cloud-app@main
         with:
           app-id: ${{ vars.DEPLOY_APP_ID }}
           app-private-key: ${{ secrets.DEPLOY_APP_KEY }}
-          # Control repo owner (target-repo defaults to "cloud-app"):
-          target-owner: vgmello
-          # This stack: stack-name must match `name:` in cloud-app.yml.
-          stack-name: orders-api
           env: ${{ inputs.environment || 'dev' }}
+          # target-owner defaults to this repo's owner (same org as the control
+          # repo); stack-name is read from the top-level `name:` in cloud-app.yml.
           # `repo` and `stack-file` default to this repo's name and cloud-app.yml.
