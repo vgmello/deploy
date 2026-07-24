@@ -5,9 +5,24 @@ managed identity signs in for which phase, and to the OIDC subject each
 identity's federated credential must trust.
 """
 
+import re
+
 MODES = ("self", "delegated")
 DEPLOY_IDENTITIES = ("plan", "apply")
 EVENTS = ("pull_request", "default_branch")
+
+# OIDC subjects are built by string interpolation; these components must not be
+# able to inject subject-claim delimiters (`:`) or wildcards.
+_ENV_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,15}$")
+_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def _validate(app_repo, central_repo, env):
+    if not _ENV_RE.match(env):
+        raise ValueError(f"invalid environment name '{env}'")
+    for repo in (app_repo, central_repo):
+        if not _REPO_RE.match(repo):
+            raise ValueError(f"invalid repo '{repo}'")
 
 
 def federation_subjects(mi, mode, app_repo, central_repo, env):
@@ -16,6 +31,7 @@ def federation_subjects(mi, mode, app_repo, central_repo, env):
         raise ValueError(f"unknown mode '{mode}'")
     if mi not in DEPLOY_IDENTITIES:
         raise ValueError(f"unknown deploy identity '{mi}'")
+    _validate(app_repo, central_repo, env)
 
     if mode == "self":
         if mi == "plan":

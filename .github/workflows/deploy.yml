@@ -20,14 +20,6 @@ on:
         description: Ref of vgmello/deploy to use
         type: string
         default: main
-      mode:
-        description: self (run the deploy here) or delegated (dispatch to the central deploy repo)
-        type: string
-        default: delegated
-      central_repo:
-        description: central deploy repo used in delegated mode
-        type: string
-        default: vgmello/deploy
 
 permissions:
   contents: read

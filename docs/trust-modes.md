@@ -4,6 +4,16 @@ How the platform authenticates to Azure, isolates privilege across deploy
 phases, and lets untrusted repos deploy without holding deploy-capable
 credentials.
 
+> **Status — not yet active in the deploy workflow.** The building blocks below
+> are implemented and unit-tested (backend rendering, federation-subject
+> resolution, login sequencing, dispatch payload/allowlist, and both Terraform
+> bootstrap stacks). They are **not yet wired into `deploy.yml`**: the running
+> deploy workflow still authenticates with the single `deploy.client_id`
+> identity and applies the main stack directly. Until the wiring lands (tracked
+> under "Not yet wired" at the bottom), self/delegated modes and the three-tier
+> identities describe the intended model, not the current runtime behavior. Do
+> not rely on the delegated boundary for isolation yet.
+
 ## Three deploy identities
 
 Every tool+environment deploys through three managed identities, each with the
@@ -84,11 +94,16 @@ state_backend:
 ```
 
 - **azurerm** — reached via `azure/login` OIDC (`use_oidc`, `use_azuread_auth`).
-  bootstrap+apply identities get Storage Blob Data Contributor on the state
-  container; plan gets Storage Blob Data Reader.
+  The state store lives in `rg-tfstate`, outside the tool RG, so the identities
+  need data-plane grants **on the state container**: bootstrap+apply → Storage
+  Blob Data Contributor, plan → Storage Blob Data Reader. These grants are
+  **not yet created by any committed stack** (see "Not yet wired") — the manual
+  `bootstrap/` stack is the intended home for the bootstrap grant.
 - **s3** — reached via `AssumeRoleWithWebIdentity` into `role_arn`. Resources
   stay Azure; the AWS login authorizes only the state backend, so an S3 run
   performs two OIDC logins (AWS for state, Azure for the plan/apply identity).
+  The config exposes a single `role_arn` shared by all phases, so S3 state has
+  no plan-vs-apply read/write split yet (Azure identities are still separated).
 
 ## One-time setup
 
@@ -98,10 +113,27 @@ identity, and its federated credential, and outputs
 `bootstrap_identity_client_id` for `environments/<env>.yml`. Everything after is
 automated on deploy.
 
+## Not yet wired (integration remaining)
+
+The logic and Terraform stacks are built and unit-tested, but these connecting
+pieces are not implemented yet:
+
+- **`deploy.yml` phase handoff** — the four deploy jobs still do one
+  `azure/login` and one main-stack apply. They do not yet run
+  `login-plan`, the bootstrap→plan→apply login sequence, or `--stack bootstrap`.
+- **Delegated dispatch** — no `repository_dispatch` entry job exists, and the
+  `dispatch.authorize` allowlist is defined in code but has no config file and
+  is never called. The `delegated` mode is therefore not enforceable yet.
+- **State-container role assignments** — the data-plane grants described above
+  are not created by any committed stack.
+- **Bootstrap role ABAC** — the bootstrap role assignment constrains
+  `roleAssignments/write` to a fixed set of role-definition GUIDs (Reader,
+  Contributor, Storage Blob Data Reader/Contributor, Key Vault Reader) via an
+  Azure ABAC condition, closing the subscription-scope escalation path.
+
 ## Live-only gaps
 
-Offline tests cover backend rendering, federation-subject resolution, login
-sequencing, dispatch, and the bootstrap stacks (mock providers). Not exercised
-until a sandbox integration run: real OIDC token exchange (Azure + AWS), RBAC
-propagation timing after the per-tool bootstrap mints the plan/apply
-identities, cross-cloud two-login runs, and the end-to-end deploy workflow.
+Even once wired, these need a sandbox integration run to validate: real OIDC
+token exchange (Azure + AWS), RBAC propagation timing after the per-tool
+bootstrap mints the plan/apply identities, cross-cloud two-login runs, and the
+end-to-end deploy workflow.

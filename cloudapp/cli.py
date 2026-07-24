@@ -27,7 +27,7 @@ def _load_json(path):
 
 
 def _load_platform(path):
-    return load_yaml(Path(path).read_text())
+    return load_yaml(Path(path).read_text()) or {}
 
 
 def _write_json(path, data):
@@ -103,6 +103,9 @@ def cmd_login_plan(args):
 
 def cmd_bootstrap_vars(args):
     platform = _load_platform(args.platform_file)
+    for field in ("subscription_id", "location"):
+        if not platform.get(field):
+            raise ValueError(f"{field} missing in {args.platform_file}")
     out = {
         "name": args.name,
         "environment": args.environment,

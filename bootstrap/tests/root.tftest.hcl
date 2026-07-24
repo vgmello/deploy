@@ -32,6 +32,11 @@ run "custom_role_is_exactly_the_seven_capabilities" {
   }
 
   assert {
+    condition     = length(azurerm_role_definition.bootstrap.permissions[0].actions) == 7
+    error_message = "bootstrap role must contain exactly the seven approved actions"
+  }
+
+  assert {
     condition     = azurerm_federated_identity_credential.bootstrap.subject == "repo:vgmello/deploy:environment:dev"
     error_message = "bootstrap federation subject must trust the trusted repo environment"
   }

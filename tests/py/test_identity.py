@@ -73,3 +73,15 @@ def test_s3_backend_marks_every_phase_for_aws_state_login():
 def test_unknown_event_fails():
     with pytest.raises(ValueError):
         identity.login_plan("tag_push", "azurerm")
+
+
+def test_subject_components_are_validated():
+    # env with a colon could inject an extra subject claim
+    with pytest.raises(ValueError):
+        identity.federation_subjects("plan", "self", "acme/orders", "vgmello/deploy", "prod:evil")
+    # wildcard env
+    with pytest.raises(ValueError):
+        identity.federation_subjects("apply", "self", "acme/orders", "vgmello/deploy", "*")
+    # malformed repo (no slash)
+    with pytest.raises(ValueError):
+        identity.federation_subjects("plan", "self", "notarepo", "vgmello/deploy", "prod")
