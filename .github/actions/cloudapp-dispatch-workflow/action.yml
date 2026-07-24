@@ -1,51 +1,94 @@
-name: cloudapp-dispatch-workflow
-description: >-
-  Dispatch a workflow_dispatch event in a target repo and wait for the run to
-  finish, failing this step if the target run does not conclude successfully.
-  This is the delegated-mode trigger: a trusted repo runs the deploy on behalf
-  of an app repo.
+name: 'cloudapp-dispatch-workflow'
+description: 'Generates GitHub App Token, dispatches target workflow with repo, stack-file, branch, and env parameters.'
+
 inputs:
-  owner:
-    description: Target repo owner
+  app-id:
+    description: 'GitHub App ID'
     required: true
+  app-private-key:
+    description: 'GitHub App Private Key (.pem contents)'
+    required: true
+
+  # Action Parameters (With Defaults)
   repo:
-    description: Target repo name
-    required: true
-  workflow:
-    description: Target workflow file name or id (e.g. deploy.yml)
-    required: true
-  ref:
-    description: Git ref of the target repo to run against
-    default: main
-  token:
-    description: Token with actions:write on the target repo
-    required: true
-  inputs:
-    description: JSON object of workflow_dispatch inputs to forward to the target
-    default: "{}"
+    description: 'Repository name calling this action (Defaults to current repository name)'
+    required: false
+    default: ''
+  stack-file:
+    description: 'Stack file parameter to pass to target workflow (Defaults to "cloud-app.yml")'
+    required: false
+    default: 'cloud-app.yml'
+  branch:
+    description: 'Branch to checkout on target repository'
+    required: false
+    default: 'main'
+  env:
+    description: 'Target deployment environment'
+    required: false
+    default: 'dev'
+
+  # Target Repository Defaults
+  target-owner:
+    description: 'Target Owner/Org (Defaults to current repository owner)'
+    required: false
+    default: ''
+  target-repo:
+    description: 'Target Repository Name (Defaults to "cloud-app")'
+    required: false
+    default: 'cloud-app'
+  target-workflow:
+    description: 'Target Workflow Filename (Defaults to "cloud-app.yml")'
+    required: false
+    default: 'cloud-app.yml'
+  target-branch:
+    description: 'Branch of target-repo to execute workflow from'
+    required: false
+    default: 'main'
+
 runs:
-  using: composite
+  using: 'composite'
   steps:
-    - id: forward
+    - name: Prepare Action Inputs & Defaults
+      id: prepare-inputs
+      shell: bash
+      run: |
+        # 1. Resolve Owner (Defaults to caller repository owner)
+        OWNER="${{ inputs.target-owner }}"
+        if [ -z "$OWNER" ]; then
+          OWNER="${{ github.repository_owner }}"
+        fi
+        echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
+
+        # 2. Resolve Repo input (Defaults to caller repository name)
+        CALLER_REPO="${{ inputs.repo }}"
+        if [ -z "$CALLER_REPO" ]; then
+          CALLER_REPO="${{ github.event.repository.name }}"
+        fi
+        echo "caller_repo=$CALLER_REPO" >> "$GITHUB_OUTPUT"
+
+    # Generate short-lived token using GitHub App credentials
+    - name: Generate GitHub App Token
+      id: generate-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.app-private-key }}
+        owner: ${{ steps.prepare-inputs.outputs.owner }}
+        repositories: ${{ inputs.target-repo }}
+
+    # Run Python script
+    - name: Trigger and Poll Target Workflow
       shell: bash
       env:
-        FORWARD_INPUTS: ${{ inputs.inputs }}
-      run: |
-        # Expand the JSON inputs map into the INPUT_<NAME> env vars the script
-        # scrapes, writing them to the job environment for the next step.
-        echo "$FORWARD_INPUTS" | python3 -c '
-        import json, os, sys
-        data = json.load(sys.stdin) or {}
-        with open(os.environ["GITHUB_ENV"], "a") as fh:
-            for key, value in data.items():
-                fh.write(f"INPUT_{key.upper()}={value}\n")
-        '
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        TARGET_OWNER: ${{ steps.prepare-inputs.outputs.owner }}
+        TARGET_REPO: ${{ inputs.target-repo }}
+        TARGET_WORKFLOW: ${{ inputs.target-workflow }}
+        TARGET_BRANCH: ${{ inputs.target-branch }}
 
-    - shell: bash
-      env:
-        TARGET_OWNER: ${{ inputs.owner }}
-        TARGET_REPO: ${{ inputs.repo }}
-        TARGET_WORKFLOW: ${{ inputs.workflow }}
-        TARGET_BRANCH: ${{ inputs.ref }}
-        GH_TOKEN: ${{ inputs.token }}
-      run: python3 "${{ github.action_path }}/../../scripts/dispatch_and_wait.py"
+        # Explicit Workflow Inputs (Mapped automatically by dispatch_and_wait.py)
+        INPUT_REPO: ${{ steps.prepare-inputs.outputs.caller_repo }}
+        INPUT_STACK_FILE: ${{ inputs.stack-file }}
+        INPUT_BRANCH: ${{ inputs.branch }}
+        INPUT_ENV: ${{ inputs.env }}
+      run: python ${{ github.action_path }}/../../scripts/dispatch_and_wait.py
