@@ -25,7 +25,6 @@ on:
       stack_name:
         description: Stack name (state key / lock key); must match the manifest name
         type: string
-        required: true
         default: cloud-app
       repo_ref:
         description: Ref of vgmello/cloud-app to use
