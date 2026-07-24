@@ -64,21 +64,7 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # The stack name comes from the manifest, so the caller repo must be on
-    # disk. Check it out only if it isn't already (avoids clobbering a workspace
-    # the caller checked out themselves).
-    - name: Determine if checkout is needed
-      id: prep
-      shell: bash
-      run: |
-        if [ -f "${{ inputs.stack-file }}" ]; then
-          echo "checkout_needed=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "checkout_needed=true" >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Checkout caller repo (to read the stack name)
-      if: steps.prep.outputs.checkout_needed == 'true'
+    - name: Checkout caller repo (for the manifest)
       uses: actions/checkout@v4
 
     - name: Resolve stack name from manifest
