@@ -46,15 +46,15 @@ The trust & identity model — three deploy identities, self/delegated modes, st
 
 ## What's in this repo
 
-| Path                                      | What                                                                                                                                          |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Path                                     | What                                                                                                                                          |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `terraform/schema/cloud-app.schema.json` | Manifest JSON Schema                                                                                                                          |
-| `cloudapp/`                              | Python package with all action logic (validate, merge, normalize, build, secrets, deploy)                                                     |
-| `.github/actions/`                        | Composite actions — thin `python3 -m cloudapp` adapters                                                                                      |
-| `.github/workflows/deploy.yml`            | Reusable deploy workflow (`workflow_call`)                                                                                                    |
-| `terraform/`                              | Root module + compute (`container-app`, `function`, `static-site`) and shared (`keyvault`, `database`, `storage`, `private-endpoint`) modules |
-| `environments/`                           | Per-environment platform config (subscription, VNet, DNS zones, ACR, state, deploy SP)                                                        |
-| `docs/superpowers/specs/`                 | Design spec                                                                                                                                   |
+| `engine/cloudapp/`                       | Python package with all action logic (validate, merge, normalize, build, secrets, deploy)                                                     |
+| `.github/actions/`                       | Composite actions — thin `python3 -m cloudapp` adapters                                                                                       |
+| `.github/workflows/deploy.yml`           | Reusable deploy workflow (`workflow_call`)                                                                                                    |
+| `terraform/azure/`                       | Root module + compute (`container-app`, `function`, `static-site`) and shared (`keyvault`, `database`, `storage`, `private-endpoint`) modules |
+| `environments/`                          | Per-environment platform config (subscription, VNet, DNS zones, ACR, state, deploy SP)                                                        |
+| `docs/superpowers/specs/`                | Design spec                                                                                                                                   |
 
 ## Manifest at a glance
 
@@ -73,9 +73,9 @@ The trust & identity model — three deploy identities, self/delegated modes, st
 ## Development
 
 ```bash
-pip install -r requirements-dev.txt
-python3 -m pytest tests/py            # action logic
-terraform -chdir=terraform test       # module logic (offline, mock providers)
+pip install -r engine/requirements-dev.txt
+(cd engine && python3 -m pytest tests/py)   # action logic (the engine)
+terraform -chdir=terraform test             # module logic (offline, mock providers)
 ```
 
 CI (`.github/workflows/ci.yml`) runs pytest, `terraform validate` + `terraform test`,

@@ -14,9 +14,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: python3 -m pip install --user -q -r requirements-dev.txt
+        run: python3 -m pip install --user -q -r engine/requirements-dev.txt
 
       - name: Run tests
+        working-directory: engine
         run: python3 -m pytest tests/py -q --cov=cloudapp --cov-report=term-missing --cov-fail-under=90
 
       - name: Lint workflows
@@ -34,25 +35,25 @@ jobs:
           terraform_version: "1.9.8"
 
       - name: Format
-        run: terraform -chdir=terraform fmt -check -recursive
+        run: terraform -chdir=terraform/azure fmt -check -recursive
 
       - name: Validate
         run: |
-          terraform -chdir=terraform init -backend=false -input=false
-          terraform -chdir=terraform validate
+          terraform -chdir=terraform/azure init -backend=false -input=false
+          terraform -chdir=terraform/azure validate
 
       - name: Fixtures in sync
         run: |
-          python3 -m pip install --user -q -r requirements.txt
-          python3 scripts/generate_tf_fixtures.py
-          git diff --exit-code terraform/tests/fixtures
+          python3 -m pip install --user -q -r engine/requirements.txt
+          python3 engine/generate_tf_fixtures.py
+          git diff --exit-code terraform/azure/tests/fixtures
 
       - name: Terraform tests
-        run: terraform -chdir=terraform test
+        run: terraform -chdir=terraform/azure test
 
       - name: Bootstrap stacks (fmt, validate, test)
         run: |
-          for dir in bootstrap terraform/bootstrap; do
+          for dir in terraform/azure/subscription-bootstrap terraform/azure/bootstrap; do
             terraform -chdir="$dir" fmt -check -recursive
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate
@@ -65,5 +66,5 @@ jobs:
 
       - name: tflint
         run: |
-          tflint --init --chdir=terraform --config="$(pwd)/.tflint.hcl"
-          tflint --chdir=terraform --recursive --config="$(pwd)/.tflint.hcl"
+          tflint --init --chdir=terraform/azure --config="$(pwd)/.tflint.hcl"
+          tflint --chdir=terraform/azure --recursive --config="$(pwd)/.tflint.hcl"

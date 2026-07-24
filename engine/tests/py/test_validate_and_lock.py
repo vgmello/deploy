@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-SCRIPT = Path(__file__).parents[2] / ".github" / "scripts" / "validate_and_lock.py"
+SCRIPT = Path(__file__).parents[3] / ".github" / "scripts" / "validate_and_lock.py"
 
 
 def run(tmp, env_name, stack_file, expected_name, caller_repo):

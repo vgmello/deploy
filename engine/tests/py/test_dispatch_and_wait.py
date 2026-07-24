@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parents[2] / ".github" / "scripts" / "dispatch_and_wait.py"
+SCRIPT = Path(__file__).parents[3] / ".github" / "scripts" / "dispatch_and_wait.py"
 
 
 @pytest.fixture(scope="module")

@@ -5,13 +5,14 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).parents[1]
-sys.path.insert(0, str(ROOT))
+ENGINE = Path(__file__).parent  # engine/ — holds cloudapp + test fixtures
+REPO = Path(__file__).parents[1]  # repo root — holds terraform/
+sys.path.insert(0, str(ENGINE))
 
 from cloudapp import manifest, resolve  # noqa: E402
 
-PLATFORM = ROOT / "tests" / "fixtures" / "environments" / "dev.yml"
-OUT = ROOT / "terraform" / "tests" / "fixtures"
+PLATFORM = ENGINE / "tests" / "fixtures" / "environments" / "dev.yml"
+OUT = REPO / "terraform" / "azure" / "tests" / "fixtures"
 
 CASES = [("minimal", "dev"), ("full", "prod"), ("multi", "dev"), ("partial", "dev")]
 
@@ -19,11 +20,11 @@ CASES = [("minimal", "dev"), ("full", "prod"), ("multi", "dev"), ("partial", "de
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for name, env in CASES:
-        _, _, tools, _ = manifest.parse(ROOT / "tests" / "fixtures" / "manifests" / f"{name}.yml")
+        _, _, tools, _ = manifest.parse(ENGINE / "tests" / "fixtures" / "manifests" / f"{name}.yml")
         tfvars = resolve.resolve(tools[env], PLATFORM, env)
         path = OUT / f"tfvars.{name}.{env}.json"
         path.write_text(json.dumps(tfvars, indent=2) + "\n")
-        print(f"wrote {path.relative_to(ROOT)}")
+        print(f"wrote {path.relative_to(REPO)}")
 
 
 if __name__ == "__main__":

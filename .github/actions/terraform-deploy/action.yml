@@ -39,7 +39,7 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: pip install -q -r "${{ github.action_path }}/../../../requirements.txt"
+      run: pip install -q -r "${{ github.action_path }}/../../../engine/requirements.txt"
 
     - id: deploy
       shell: bash
@@ -48,7 +48,7 @@ runs:
         IMAGE_TAGS: ${{ inputs.image-tags }}
         TARGETS: ${{ inputs.targets }}
       run: >-
-        PYTHONPATH="${{ github.action_path }}/../../.."
+        PYTHONPATH="${{ github.action_path }}/../../../engine"
         python3 -m cloudapp terraform-deploy
         --terraform-dir "${{ inputs.terraform-dir }}"
         --tfvars-file "${{ inputs.tfvars-file }}"

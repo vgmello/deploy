@@ -21,12 +21,12 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: pip install -q -r "${{ github.action_path }}/../../../requirements.txt"
+      run: pip install -q -r "${{ github.action_path }}/../../../engine/requirements.txt"
 
     - id: build
       shell: bash
       run: >-
-        PYTHONPATH="${{ github.action_path }}/../../.."
+        PYTHONPATH="${{ github.action_path }}/../../../engine"
         python3 -m cloudapp docker-build
         --tool-json "${{ inputs.tool-json }}"
         --tool-name "${{ inputs.tool-name }}"

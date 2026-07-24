@@ -33,9 +33,9 @@ The plan identity is read-only; only the apply identity writes.
 
 Per tool+environment:
 
-- `terraform/bootstrap/` → `<tool>/<env>.bootstrap.tfstate` — the RG and the
+- `terraform/azure/bootstrap/` → `<tool>/<env>.bootstrap.tfstate` — the RG and the
   plan/apply identities. Written by the bootstrap identity.
-- `terraform/` (main) → `<tool>/<env>.tfstate` — the actual resources. Read by
+- `terraform/azure/` (main) → `<tool>/<env>.tfstate` — the actual resources. Read by
   the plan identity, written by the apply identity.
 
 ## Event-gated phases
@@ -98,7 +98,7 @@ state_backend:
   need data-plane grants **on the state container**: bootstrap+apply → Storage
   Blob Data Contributor, plan → Storage Blob Data Reader. These grants are
   **not yet created by any committed stack** (see "Not yet wired") — the manual
-  `bootstrap/` stack is the intended home for the bootstrap grant.
+  `terraform/azure/subscription-bootstrap/` stack is the intended home for the bootstrap grant.
 - **s3** — reached via `AssumeRoleWithWebIdentity` into `role_arn`. Resources
   stay Azure; the AWS login authorizes only the state backend, so an S3 run
   performs two OIDC logins (AWS for state, Azure for the plan/apply identity).
@@ -107,8 +107,9 @@ state_backend:
 
 ## One-time setup
 
-A subscription owner runs `bootstrap/` once per subscription+environment (see
-`bootstrap/README.md`): it creates the custom role, the shared bootstrap
+A subscription owner runs `terraform/azure/subscription-bootstrap/` once per
+subscription+environment (see `terraform/azure/subscription-bootstrap/README.md`): it
+creates the custom role, the shared bootstrap
 identity, and its federated credential, and outputs
 `bootstrap_identity_client_id` for `environments/<env>.yml`. Everything after is
 automated on deploy.
@@ -134,6 +135,7 @@ pieces are not implemented yet:
 
   (The `cloudapp.dispatch.authorize` helper is a code-level allowlist alternative
   to the registry gate; the registry is the mechanism actually wired in.)
+
 - **State-container role assignments** — the data-plane grants described above
   are not created by any committed stack.
 - **Bootstrap role ABAC** — the bootstrap role assignment constrains

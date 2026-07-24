@@ -199,7 +199,7 @@ jobs:
         if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
@@ -220,7 +220,7 @@ jobs:
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
@@ -303,7 +303,7 @@ jobs:
         if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
@@ -324,7 +324,7 @@ jobs:
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
@@ -407,7 +407,7 @@ jobs:
         if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
@@ -428,7 +428,7 @@ jobs:
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
@@ -511,7 +511,7 @@ jobs:
         if: ${{ inputs.plan_only == false && steps.secrets.outputs.vault-exists == 'false' }}
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
           tool-name: ${{ needs.setup.outputs.name }}
@@ -532,7 +532,7 @@ jobs:
       - id: deploy
         uses: ./.deploy/.github/actions/terraform-deploy
         with:
-          terraform-dir: .deploy/terraform
+          terraform-dir: .deploy/terraform/azure
           tfvars-file: tfvars.json
           image-tags: ${{ needs.build.outputs.image-tags || '{}' }}
           tool-json: .cloud-app/tool.${{ env.DEPLOY_ENV }}.json
