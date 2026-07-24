@@ -5,7 +5,7 @@ from cloudapp import identity
 
 def test_self_mode_plan_subjects_reference_app_repo():
     subs = identity.federation_subjects(
-        "plan", "self", app_repo="acme/orders", central_repo="vgmello/deploy", env="prod"
+        "plan", "self", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
     )
     assert subs == [
         "repo:acme/orders:pull_request",
@@ -15,29 +15,29 @@ def test_self_mode_plan_subjects_reference_app_repo():
 
 def test_self_mode_apply_subject_is_environment_only():
     subs = identity.federation_subjects(
-        "apply", "self", app_repo="acme/orders", central_repo="vgmello/deploy", env="prod"
+        "apply", "self", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
     )
     assert subs == ["repo:acme/orders:environment:prod"]
 
 
 def test_delegated_mode_plan_uses_central_plan_environment():
     subs = identity.federation_subjects(
-        "plan", "delegated", app_repo="acme/orders", central_repo="vgmello/deploy", env="prod"
+        "plan", "delegated", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
     )
-    assert subs == ["repo:vgmello/deploy:environment:prod-plan"]
+    assert subs == ["repo:vgmello/cloud-app:environment:prod-plan"]
 
 
 def test_delegated_mode_apply_uses_central_environment():
     subs = identity.federation_subjects(
-        "apply", "delegated", app_repo="acme/orders", central_repo="vgmello/deploy", env="prod"
+        "apply", "delegated", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
     )
-    assert subs == ["repo:vgmello/deploy:environment:prod"]
+    assert subs == ["repo:vgmello/cloud-app:environment:prod"]
 
 
 def test_delegated_mode_never_references_app_repo():
     for mi in ("plan", "apply"):
         subs = identity.federation_subjects(
-            mi, "delegated", app_repo="acme/orders", central_repo="vgmello/deploy", env="prod"
+            mi, "delegated", app_repo="acme/orders", central_repo="vgmello/cloud-app", env="prod"
         )
         assert all("acme/orders" not in s for s in subs)
 
@@ -78,10 +78,10 @@ def test_unknown_event_fails():
 def test_subject_components_are_validated():
     # env with a colon could inject an extra subject claim
     with pytest.raises(ValueError):
-        identity.federation_subjects("plan", "self", "acme/orders", "vgmello/deploy", "prod:evil")
+        identity.federation_subjects("plan", "self", "acme/orders", "vgmello/cloud-app", "prod:evil")
     # wildcard env
     with pytest.raises(ValueError):
-        identity.federation_subjects("apply", "self", "acme/orders", "vgmello/deploy", "*")
+        identity.federation_subjects("apply", "self", "acme/orders", "vgmello/cloud-app", "*")
     # malformed repo (no slash)
     with pytest.raises(ValueError):
-        identity.federation_subjects("plan", "self", "notarepo", "vgmello/deploy", "prod")
+        identity.federation_subjects("plan", "self", "notarepo", "vgmello/cloud-app", "prod")

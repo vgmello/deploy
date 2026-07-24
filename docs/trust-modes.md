@@ -63,8 +63,8 @@ bootstrap stack, sourced from `cloudapp.identity.federation_subjects`):
 
 | Identity  | self mode                                                 | delegated mode                               |
 | --------- | --------------------------------------------------------- | -------------------------------------------- |
-| plan      | `repo:<app>:pull_request`, `repo:<app>:environment:<env>` | `repo:vgmello/deploy:environment:<env>-plan` |
-| apply     | `repo:<app>:environment:<env>`                            | `repo:vgmello/deploy:environment:<env>`      |
+| plan      | `repo:<app>:pull_request`, `repo:<app>:environment:<env>` | `repo:vgmello/cloud-app:environment:<env>-plan` |
+| apply     | `repo:<app>:environment:<env>`                            | `repo:vgmello/cloud-app:environment:<env>`      |
 | bootstrap | `repo:<trusted>:environment:<env>`                        | same                                         |
 
 The subject is the security boundary: a delegated app repo cannot mint an OIDC

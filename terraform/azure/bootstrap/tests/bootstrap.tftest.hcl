@@ -5,8 +5,8 @@ variables {
   location        = "eastus2"
   name            = "orders-api"
   environment     = "prod"
-  plan_subjects   = ["repo:vgmello/deploy:environment:prod-plan"]
-  apply_subjects  = ["repo:vgmello/deploy:environment:prod"]
+  plan_subjects   = ["repo:vgmello/cloud-app:environment:prod-plan"]
+  apply_subjects  = ["repo:vgmello/cloud-app:environment:prod"]
 }
 
 run "identities_and_scoped_roles" {
@@ -29,7 +29,7 @@ run "identities_and_scoped_roles" {
     error_message = "plan identity must get the data-plane reader roles for refresh"
   }
   assert {
-    condition     = azurerm_federated_identity_credential.apply[0].subject == "repo:vgmello/deploy:environment:prod"
+    condition     = azurerm_federated_identity_credential.apply[0].subject == "repo:vgmello/cloud-app:environment:prod"
     error_message = "apply federation subject passthrough"
   }
 }

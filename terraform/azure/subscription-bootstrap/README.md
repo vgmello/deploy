@@ -9,7 +9,7 @@ repo's `environment:<env>` subject.
 terraform -chdir=terraform/azure/subscription-bootstrap init
 terraform -chdir=terraform/azure/subscription-bootstrap apply \
   -var subscription_id=<sub> -var location=eastus2 \
-  -var environment=dev -var trusted_repo=vgmello/deploy
+  -var environment=dev -var trusted_repo=vgmello/cloud-app
 ```
 
 Record `bootstrap_identity_client_id` in `environments/<env>.yml` as

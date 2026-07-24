@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
       deploy_ref:
-        description: Ref of vgmello/deploy to use
+        description: Ref of vgmello/cloud-app to use
         type: string
         default: main
 
@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: vgmello/deploy
+          repository: vgmello/cloud-app
           ref: ${{ inputs.deploy_ref }}
           path: .deploy
 
@@ -90,7 +90,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: vgmello/deploy
+          repository: vgmello/cloud-app
           ref: ${{ inputs.deploy_ref }}
           path: .deploy
 
@@ -145,7 +145,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: vgmello/deploy
+          repository: vgmello/cloud-app
           ref: ${{ inputs.deploy_ref }}
           path: .deploy
 
@@ -249,7 +249,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: vgmello/deploy
+          repository: vgmello/cloud-app
           ref: ${{ inputs.deploy_ref }}
           path: .deploy
 
@@ -353,7 +353,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: vgmello/deploy
+          repository: vgmello/cloud-app
           ref: ${{ inputs.deploy_ref }}
           path: .deploy
 
@@ -457,7 +457,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: vgmello/deploy
+          repository: vgmello/cloud-app
           ref: ${{ inputs.deploy_ref }}
           path: .deploy
 

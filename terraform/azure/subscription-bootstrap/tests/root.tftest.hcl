@@ -4,7 +4,7 @@ variables {
   subscription_id = "00000000-0000-0000-0000-000000000000"
   location        = "eastus2"
   environment     = "dev"
-  trusted_repo    = "vgmello/deploy"
+  trusted_repo    = "vgmello/cloud-app"
 }
 
 run "custom_role_is_exactly_the_seven_capabilities" {
@@ -37,7 +37,7 @@ run "custom_role_is_exactly_the_seven_capabilities" {
   }
 
   assert {
-    condition     = azurerm_federated_identity_credential.bootstrap.subject == "repo:vgmello/deploy:environment:dev"
+    condition     = azurerm_federated_identity_credential.bootstrap.subject == "repo:vgmello/cloud-app:environment:dev"
     error_message = "bootstrap federation subject must trust the trusted repo environment"
   }
 }

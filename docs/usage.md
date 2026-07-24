@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   deploy:
-    uses: vgmello/deploy/.github/workflows/deploy.yml@v1
+    uses: vgmello/cloud-app/.github/workflows/deploy.yml@v1
     secrets: inherit
     with:
       plan_only: ${{ github.event_name == 'pull_request' }}

@@ -1,4 +1,4 @@
-# deploy
+# cloud-app
 
 A deployment platform that lets teams ship Azure resources through Terraform
 without writing any. Describe an app in a small `.cloud-app.yml` manifest at
@@ -34,7 +34,7 @@ on:
 permissions: { contents: read, id-token: write }
 jobs:
   deploy:
-    uses: vgmello/deploy/.github/workflows/deploy.yml@v1
+    uses: vgmello/cloud-app/.github/workflows/deploy.yml@v1
     secrets: inherit
     with:
       plan_only: ${{ github.event_name == 'pull_request' }}
@@ -75,7 +75,7 @@ The trust & identity model — three deploy identities, self/delegated modes, st
 ```bash
 pip install -r engine/requirements-dev.txt
 (cd engine && python3 -m pytest tests/py)   # action logic (the engine)
-terraform -chdir=terraform test             # module logic (offline, mock providers)
+terraform -chdir=terraform/azure test       # module logic (offline, mock providers)
 ```
 
 CI (`.github/workflows/ci.yml`) runs pytest, `terraform validate` + `terraform test`,

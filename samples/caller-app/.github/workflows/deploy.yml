@@ -2,7 +2,7 @@
 #
 # Copy this into your app repo at .github/workflows/deploy.yml. It never holds
 # deploy credentials or Azure identity — it only dispatches to the central
-# control repo (vgmello/deploy), which runs the deploy under its own identity
+# control repo (vgmello/cloud-app), which runs the deploy under its own identity
 # after the stack-lock registry authorizes this repo.
 #
 # Required in this repo's settings:
@@ -29,13 +29,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deploy to control plane
-        uses: vgmello/deploy/.github/actions/cloud-app@main
+        uses: vgmello/cloud-app/.github/actions/cloud-app@main
         with:
           app-id: ${{ vars.DEPLOY_APP_ID }}
           app-private-key: ${{ secrets.DEPLOY_APP_KEY }}
-          # Control repo that actually runs the deploy:
+          # Control repo owner (target-repo defaults to "cloud-app"):
           target-owner: vgmello
-          target-repo: deploy
           # This stack: stack-name must match `name:` in cloud-app.yml.
           stack-name: orders-api
           env: ${{ inputs.environment || 'dev' }}

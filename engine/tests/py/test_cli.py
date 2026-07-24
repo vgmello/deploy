@@ -160,12 +160,12 @@ def test_bootstrap_vars_command_delegated_uses_central_subjects(capsys):
     rc = cli.main([
         "bootstrap-vars", "--name", "orders-api", "--environment", "prod",
         "--mode", "delegated", "--app-repo", "acme/orders",
-        "--central-repo", "vgmello/deploy", "--platform-file", str(ENVDIR / "dev.yml"),
+        "--central-repo", "vgmello/cloud-app", "--platform-file", str(ENVDIR / "dev.yml"),
     ])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["plan_subjects"] == ["repo:vgmello/deploy:environment:prod-plan"]
-    assert out["apply_subjects"] == ["repo:vgmello/deploy:environment:prod"]
+    assert out["plan_subjects"] == ["repo:vgmello/cloud-app:environment:prod-plan"]
+    assert out["apply_subjects"] == ["repo:vgmello/cloud-app:environment:prod"]
     assert out["name"] == "orders-api"
 
 
