@@ -47,6 +47,10 @@ Create a GitHub environment per manifest env key (`dev`, `prod`, ...). Put
 required reviewers on `prod` — that is the approval gate. Add any manifest
 `secrets:` names as environment secrets.
 
+## Trust & identity
+
+See [trust-modes.md](trust-modes.md) for the three deploy identities, self vs delegated execution, state backends (Azure Blob / AWS S3), and the one-time bootstrap.
+
 ## Notes
 
 - Push to main deploys every environment in manifest order; the chain stops

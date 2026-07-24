@@ -68,3 +68,11 @@ def test_apply_retries_once_after_failure():
     assert len(attempts) == 2
     assert sleeps == [30]
     assert len(run.commands("terraform", "-chdir=terraform", "plan")) == 2
+
+
+def test_prepare_bootstrap_stack_uses_bootstrap_state_key():
+    lines, _, _ = tfdeploy.prepare(
+        ENVDIR / "dev.yml", tool(), "orders-api", "dev",
+        "{}", plan_only=False, stack="bootstrap", fetch_ip=lambda: None,
+    )
+    assert any(line == "key=orders-api/dev.bootstrap.tfstate" for line in lines)

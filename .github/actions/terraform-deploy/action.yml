@@ -28,6 +28,9 @@ inputs:
   targets:
     description: Space-separated -target addresses for a partial apply
     default: ""
+  stack:
+    description: Which stack to deploy — main or bootstrap
+    default: main
 outputs:
   summary:
     description: One-line plan/apply summary
@@ -55,4 +58,5 @@ runs:
         --platform-file "${{ inputs.platform-file }}"
         --image-tags "$IMAGE_TAGS"
         --targets "$TARGETS"
+        --stack "${{ inputs.stack }}"
         ${{ inputs.plan-only == 'true' && '--plan-only' || '' }}

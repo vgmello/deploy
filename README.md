@@ -42,6 +42,7 @@ jobs:
 ```
 
 Full manifest reference and onboarding steps: [docs/usage.md](docs/usage.md).
+How authentication, the three deploy identities, and self/delegated trust modes work: [docs/trust-modes.md](docs/trust-modes.md).
 
 ## What's in this repo
 

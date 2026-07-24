@@ -87,7 +87,7 @@ def cmd_terraform_deploy(args):
     tool = _load_json(args.tool_json)
     backend_lines, tags, runner_ip = tfdeploy.prepare(
         args.platform_file, tool, args.tool_name, args.environment,
-        args.image_tags, args.plan_only,
+        args.image_tags, args.plan_only, stack=args.stack,
     )
     summary = tfdeploy.deploy(
         args.terraform_dir, args.tfvars_file, backend_lines, tags, runner_ip,
@@ -165,6 +165,7 @@ def main(argv=None):
     p.add_argument("--image-tags", default="{}")
     p.add_argument("--plan-only", action="store_true")
     p.add_argument("--targets", default="")
+    p.add_argument("--stack", default="main", choices=["main", "bootstrap"])
     p.set_defaults(func=cmd_terraform_deploy)
 
     p = sub.add_parser("login-plan")
