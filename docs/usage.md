@@ -49,7 +49,7 @@ required reviewers on `prod` — that is the approval gate. Add any manifest
 
 ## Trust & identity
 
-See [trust-modes.md](trust-modes.md) for the three deploy identities, self vs delegated execution, state backends (Azure Blob / AWS S3), and the one-time bootstrap.
+See [trust-modes.md](trust-modes.md) for the three deploy identities, self vs delegated execution, state backends (Azure Blob / AWS S3), and the one-time bootstrap. Delegated-mode stack ownership is governed by the [registries/](../registries/README.md) lock files.
 
 ## Notes
 
